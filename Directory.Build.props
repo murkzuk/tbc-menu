@@ -4,7 +4,7 @@
   <Import Project="$(MSBuildThisFileDirectory)Local.props" Condition="Exists('$(MSBuildThisFileDirectory)Local.props')" />
 
   <PropertyGroup>
-    <Version>1.1.1</Version>
+    <Version>1.1.2</Version>
 
     <!-- Game folder resolution order:
          1. -p:GameDir="..." on the command line

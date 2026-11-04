@@ -9,6 +9,10 @@ https://store.steampowered.com/app/5086560/Tank_Battle_Classic/
 
 Author: **murkzuk** - https://github.com/murkzuk
 
+**Built by DeepSeek** - an AI agent wrote the code, did the reverse engineering behind
+[docs/graphics-notes.md](docs/graphics-notes.md) and wrote this documentation, at murkzuk's
+request. murkzuk asked for it, directed the work, tested it, and owns the result.
+
 ![menu](docs/screenshot-menu.png)
 
 ## Why this exists
@@ -98,6 +102,17 @@ environment variable, create a `Local.props` with `<GameDir>...</GameDir>`, or p
 
 Source layout: `MenuMod.cs` (lifecycle and state), `Config.cs` (JSON shape and IO),
 `Apply.cs` (everything that mutates the game), `MenuUi.cs` (the uGUI menu).
+
+## Credits
+
+- **Built by DeepSeek** (AI), at the request of **murkzuk**. The mod, the reverse-engineering
+  notes and this README were produced by the model in a single session; every step was driven
+  by murkzuk's requests and validated by running the game.
+- **Requested, directed and tested by murkzuk** (https://github.com/murkzuk), who owns the
+  result and chose to keep the repository private.
+- Thanks to **fierman** for
+  [TankBattleMissionEditor](https://github.com/fiermanb/TankBattleMissionEditor), whose approach
+  to regenerating the game's stripped type trees is described in the notes.
 
 ## Licence
 
