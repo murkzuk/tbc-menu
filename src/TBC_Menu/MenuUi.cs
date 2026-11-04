@@ -157,32 +157,64 @@ namespace TbcMenu
             else BuildTuningRows(ref y);
 
             y += 8f;
-            AddRow(ref y, "Save settings", () => "click", d => Save());
-            AddRow(ref y, "Reload from disk", () => "click", d => { Load(); ApplyAll("reload"); });
-            AddRow(ref y, "Close  (F7)", () => "click", d => Toggle());
+            AddRow(ref y, "Save settings", () => "click", d => Save(), null, false);
+            AddRow(ref y, "Reload from disk", () => "click", d => { Load(); ApplyAll("reload"); }, null, false);
+            AddRow(ref y, "Close  (F7)", () => "click", d => Toggle(), null, false);
             AddRow(ref y, "left half = down / right half = up", () => "", null, new Color(0.6f, 0.65f, 0.75f));
 
             _builtTab = _tab;
         }
 
-        private void AddRow(ref float y, string label, Func<string> value, Action<int> onClick, Color? valueCol = null)
+        private const float ArrowW = 34f;
+
+        // arrows = true draws clickable "<" and ">" buttons either side of the value,
+        // so decreasing is a visible target instead of invisible blank space.
+        private void AddRow(ref float y, string label, Func<string> value, Action<int> onClick,
+                            Color? valueCol = null, bool arrows = true)
         {
             var lt = MakeText("l", LabelX, y, LabelW, RowH, 20, Color.white, TextAnchor.MiddleLeft);
             lt.text = label;
+
             Text vt = null;
             if (value != null)
             {
-                vt = MakeText("v", ValueX, y, ValueW, RowH, 20, valueCol ?? new Color(1f, 0.85f, 0.2f), TextAnchor.MiddleRight);
+                float vx = arrows ? ValueX + ArrowW : ValueX;
+                float vw = arrows ? ValueW - ArrowW * 2f : ValueW;
+                vt = MakeText("v", vx, y, vw, RowH, 20, valueCol ?? new Color(1f, 0.85f, 0.2f), TextAnchor.MiddleRight);
                 vt.text = value();
             }
-            _rows.Add(new Row
+
+            if (onClick == null)
             {
-                labelText = lt,
-                valueText = vt,
-                value = value,
-                onClick = onClick,
-                rect = new Rect(ValueX, y, ValueW, RowH),
-            });
+                _rows.Add(new Row { labelText = lt, valueText = vt, value = value, onClick = null });
+            }
+            else if (!arrows)
+            {
+                _rows.Add(new Row
+                {
+                    labelText = lt, valueText = vt, value = value, onClick = onClick,
+                    rect = new Rect(ValueX, y, ValueW, RowH),
+                });
+            }
+            else
+            {
+                var left = MakeText("larrow", ValueX, y, ArrowW, RowH, 20, new Color(0.75f, 0.85f, 1f), TextAnchor.MiddleCenter);
+                left.text = "<";
+                var right = MakeText("rarrow", ValueX + ValueW - ArrowW, y, ArrowW, RowH, 20, new Color(0.75f, 0.85f, 1f), TextAnchor.MiddleCenter);
+                right.text = ">";
+
+                _rows.Add(new Row { labelText = left, value = null, onClick = d => onClick(-1), rect = new Rect(ValueX, y, ArrowW, RowH) });
+                _rows.Add(new Row { labelText = null, valueText = vt, value = value, onClick = null });
+                _rows.Add(new Row { labelText = right, value = null, onClick = d => onClick(1), rect = new Rect(ValueX + ValueW - ArrowW, y, ArrowW, RowH) });
+
+                // fallback: the whole row is live too - left half down, right half up.
+                // registered last so the arrows take priority.
+                _rows.Add(new Row
+                {
+                    labelText = null, valueText = null, value = null, onClick = onClick,
+                    rect = new Rect(LabelX, y, (ValueX - LabelX) + ValueW, RowH),
+                });
+            }
             y += RowH;
         }
 
