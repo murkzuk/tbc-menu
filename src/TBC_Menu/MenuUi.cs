@@ -1,0 +1,343 @@
+// The in-game menu. Unity stripped IMGUI out of this build, so this is uGUI:
+// plain Text/Image objects plus manual hit-testing against Input.mousePosition.
+using System;
+using System.Collections.Generic;
+using System.IO;
+using MelonLoader;
+using MelonLoader.Utils;
+using Newtonsoft.Json;
+using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
+using UnityEngine.UI;
+using Il2CppChobiAssets.PTM;
+using Il2CppInterop.Runtime.InteropTypes.Arrays;
+
+namespace TbcMenu
+{
+    public partial class MenuMod
+    {
+        // ---- menu (uGUI; IMGUI is stripped out of this build) ---------------
+
+
+        private GameObject _root;
+        private Transform _canvasTr;
+        private Font _font;
+        private readonly List<Row> _rows = new List<Row>();
+        private readonly List<Cannon_Fire_Input_01_Mouse_CS> _mutedFire = new List<Cannon_Fire_Input_01_Mouse_CS>();
+        private int _builtTab = -1;
+
+        private class Row
+        {
+            public Text labelText;
+            public Text valueText;
+            public Rect rect;
+            public Action<int> onClick;
+            public Func<string> value;
+        }
+
+        private static readonly string[] TabNames = { "Resolution", "Visuals", "Quality", "Effects", "Tuning" };
+        private const float PanelX = 40f, PanelY = 50f, PanelW = 780f, RowH = 34f;
+        private const float LabelX = 56f, LabelW = 520f, ValueX = 600f, ValueW = 200f;
+
+        private void BuildUI()
+        {
+            if (_root != null) return;
+            try
+            {
+                _font = FindFont();
+                _root = new GameObject("TBC_Menu_Canvas");
+                UnityEngine.Object.DontDestroyOnLoad(_root);
+                var canvas = _root.AddComponent<Canvas>();
+                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                canvas.sortingOrder = 32000;
+                var scaler = _root.AddComponent<CanvasScaler>();
+                scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+                scaler.scaleFactor = 1f;
+                scaler.referencePixelsPerUnit = 100f;
+                _canvasTr = _root.transform;
+                LoggerInstance.Msg($"UI built (font={(_font == null ? "NULL" : _font.name)})");
+            }
+            catch (Exception e) { LoggerInstance.Error("UI build failed: " + e.Message); }
+        }
+
+        private Font FindFont()
+        {
+            try
+            {
+                foreach (var t in Resources.FindObjectsOfTypeAll<Text>())
+                    if (t != null && t.font != null) return t.font;
+            }
+            catch { }
+            try
+            {
+                foreach (var fo in Resources.FindObjectsOfTypeAll<Font>())
+                    if (fo != null) return fo;
+            }
+            catch { }
+            return null;
+        }
+
+        private Text MakeText(string name, float x, float y, float w, float h, int size, Color col, TextAnchor anchor)
+        {
+            var go = new GameObject(name);
+            var rt = go.AddComponent<RectTransform>();
+            rt.SetParent(_canvasTr, false);
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.anchoredPosition = new Vector2(x, -y);
+            rt.sizeDelta = new Vector2(w, h);
+            var tx = go.AddComponent<Text>();
+            tx.font = _font;
+            tx.fontSize = size;
+            tx.color = col;
+            tx.alignment = anchor;
+            tx.horizontalOverflow = HorizontalWrapMode.Overflow;
+            tx.verticalOverflow = VerticalWrapMode.Overflow;
+            tx.raycastTarget = false;
+            return tx;
+        }
+
+        private void MakeImage(float x, float y, float w, float h, Color col)
+        {
+            var go = new GameObject("panel");
+            var rt = go.AddComponent<RectTransform>();
+            rt.SetParent(_canvasTr, false);
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.anchoredPosition = new Vector2(x, -y);
+            rt.sizeDelta = new Vector2(w, h);
+            var img = go.AddComponent<Image>();
+            img.color = col;
+            img.raycastTarget = false;
+        }
+
+        private void RebuildMenu()
+        {
+            if (_root == null) return;
+            for (int i = _canvasTr.childCount - 1; i >= 0; i--)
+            {
+                var ch = _canvasTr.GetChild(i);
+                if (ch != null) UnityEngine.Object.Destroy(ch.gameObject);
+            }
+            _rows.Clear();
+
+            float total = PanelY + 128f;
+            if (_tab == 0) total += RowH * 7f;
+            else if (_tab == 1) total += RowH * 8f;
+            else if (_tab == 2) total += RowH * 6f;
+            else if (_tab == 3) total += RowH * 7f;
+            else total += RowH * 16f;
+            total += RowH * 4f;
+            MakeImage(PanelX, PanelY, PanelW, total, new Color(0.02f, 0.02f, 0.05f, 0.95f));
+            MakeText("title", LabelX, PanelY + 10f, PanelW - 32f, 28f, 24, Color.white, TextAnchor.MiddleLeft).text = "TBC Menu   [F7]";
+
+            float y = PanelY + 46f;
+            for (int i = 0; i < TabNames.Length; i++)
+            {
+                int captured = i;
+                var tx = MakeText("tab" + i, LabelX + i * 146f, y, 142f, RowH, 20,
+                    _tab == i ? new Color(1f, 0.85f, 0.2f) : new Color(0.7f, 0.78f, 0.9f), TextAnchor.MiddleLeft);
+                tx.text = (_tab == i ? "> " : "   ") + TabNames[i];
+                _rows.Add(new Row
+                {
+                    labelText = tx,
+                    rect = new Rect(LabelX + i * 146f, y, 142f, RowH),
+                    onClick = d => { _tab = captured; RebuildMenu(); },
+                });
+            }
+            y += RowH + 10f;
+
+            if (_tab == 0) BuildResolutionRows(ref y);
+            else if (_tab == 1) BuildVisualRows(ref y);
+            else if (_tab == 2) BuildQualityRows(ref y);
+            else if (_tab == 3) BuildEffectRows(ref y);
+            else BuildTuningRows(ref y);
+
+            y += 8f;
+            AddRow(ref y, "Save settings", () => "click", d => Save());
+            AddRow(ref y, "Reload from disk", () => "click", d => { Load(); ApplyAll("reload"); });
+            AddRow(ref y, "Close  (F7)", () => "click", d => Toggle());
+            AddRow(ref y, "left half = down / right half = up", () => "", null, new Color(0.6f, 0.65f, 0.75f));
+
+            _builtTab = _tab;
+        }
+
+        private void AddRow(ref float y, string label, Func<string> value, Action<int> onClick, Color? valueCol = null)
+        {
+            var lt = MakeText("l", LabelX, y, LabelW, RowH, 20, Color.white, TextAnchor.MiddleLeft);
+            lt.text = label;
+            Text vt = null;
+            if (value != null)
+            {
+                vt = MakeText("v", ValueX, y, ValueW, RowH, 20, valueCol ?? new Color(1f, 0.85f, 0.2f), TextAnchor.MiddleRight);
+                vt.text = value();
+            }
+            _rows.Add(new Row
+            {
+                labelText = lt,
+                valueText = vt,
+                value = value,
+                onClick = onClick,
+                rect = new Rect(ValueX, y, ValueW, RowH),
+            });
+            y += RowH;
+        }
+
+        private void AddToggleRow(ref float y, string label, Func<bool> get, Action<bool> set)
+            => AddRow(ref y, label, () => get() ? "ON" : "OFF", d => set(!get()));
+
+        private void AddFloatRow(ref float y, string label, Func<float> get, Action<float> set, float min, float max, float step, string fmt)
+            => AddRow(ref y, label, () => get().ToString(fmt), d => set(Mathf.Clamp(get() + d * step, min, max)));
+
+        private void AddIntRow(ref float y, string label, Func<int> get, Action<int> set, int min, int max, int step)
+            => AddRow(ref y, label, () => get().ToString(), d => set(Mathf.Clamp(get() + d * step, min, max)));
+
+        private void AddChoiceRow(ref float y, string label, string[] options, Func<string> get, Action<string> set)
+            => AddRow(ref y, label, get, d =>
+            {
+                int i = Array.IndexOf(options, get());
+                if (i < 0) i = 0;
+                i = (i + (d > 0 ? 1 : options.Length - 1)) % options.Length;
+                set(options[i]);
+            });
+
+        private void BuildResolutionRows(ref float y)
+        {
+            var r = _cfg.resolution;
+            AddIntRow(ref y, "Width", () => r.width, v => { r.width = v; ApplyResolution(); }, 640, 3840, 40);
+            AddIntRow(ref y, "Height", () => r.height, v => { r.height = v; ApplyResolution(); }, 480, 2160, 30);
+            AddChoiceRow(ref y, "Fullscreen mode", new[] { "Exclusive", "Borderless", "Maximized", "Windowed" },
+                () => new[] { "Exclusive", "Borderless", "Maximized", "Windowed" }[Mathf.Clamp(r.fullscreen_mode, 0, 3)],
+                s => { r.fullscreen_mode = Math.Max(0, Array.IndexOf(new[] { "Exclusive", "Borderless", "Maximized", "Windowed" }, s)); ApplyResolution(); });
+            AddFloatRow(ref y, "Internal scale", () => r.internal_scale, v => { r.internal_scale = v; SyncBuffer("menu"); }, 0.1f, 2f, 0.05f, "F2");
+            AddRow(ref y, "Render buffer", () =>
+            {
+                var rt = FindBuffer();
+                return rt == null ? "none" : rt.width + "x" + rt.height;
+            }, d => SyncBuffer("menu"));
+            AddRow(ref y, "Screen now", () => Screen.width + "x" + Screen.height, null, new Color(0.7f, 0.78f, 0.9f));
+        }
+
+        private void BuildVisualRows(ref float y)
+        {
+            var v = _cfg.visuals;
+            AddFloatRow(ref y, "Film grain", () => v.film_grain, x => { v.film_grain = x; ApplyVisuals("menu"); }, 0f, 1f, 0.05f, "F2");
+            AddFloatRow(ref y, "Chromatic aberration", () => v.chromatic_aberration, x => { v.chromatic_aberration = x; ApplyVisuals("menu"); }, 0f, 1f, 0.05f, "F2");
+            AddFloatRow(ref y, "Vignette", () => v.vignette, x => { v.vignette = x; ApplyVisuals("menu"); }, 0f, 1f, 0.05f, "F2");
+            AddFloatRow(ref y, "Fog density scale", () => v.fog_density_scale, x => { v.fog_density_scale = x; ApplyFog("menu"); }, 0f, 1.5f, 0.1f, "F2");
+            AddChoiceRow(ref y, "Antialiasing", new[] { "off", "fxaa", "smaa", "taa" }, () => v.antialiasing ?? "off", s => { v.antialiasing = s; ApplyVisuals("menu"); });
+            AddToggleRow(ref y, "Dithering", () => v.dithering, b => { v.dithering = b; ApplyVisuals("menu"); });
+            AddIntRow(ref y, "Texture aniso", () => v.texture_aniso, x => { v.texture_aniso = x; _assetsDone.Clear(); ApplyAssets("menu"); }, 0, 16, 2);
+        }
+
+        private void BuildQualityRows(ref float y)
+        {
+            var q = _cfg.quality;
+            AddRow(ref y, "MSAA", () => q.msaa + "x", d =>
+            {
+                int[] steps = { 1, 2, 4, 8 };
+                int i = Array.IndexOf(steps, q.msaa); if (i < 0) i = 0;
+                i = (i + d + steps.Length) % steps.Length;
+                q.msaa = steps[i];
+                ApplyQuality("menu"); SyncBuffer("menu");
+            });
+            AddRow(ref y, "Main light shadowmap", () => q.main_light_shadow_res.ToString(), d =>
+            {
+                int[] steps = { 1024, 2048, 4096 };
+                int i = Array.IndexOf(steps, q.main_light_shadow_res); if (i < 0) i = 0;
+                i = Mathf.Clamp(i + d, 0, steps.Length - 1);
+                q.main_light_shadow_res = steps[i];
+                ApplyQuality("menu");
+            });
+            AddChoiceRow(ref y, "Soft shadow quality", new[] { "use", "low", "medium", "high" },
+                () => q.soft_shadow_quality ?? "use", s => { q.soft_shadow_quality = s; ApplyQuality("menu"); });
+            AddFloatRow(ref y, "Shadow distance", () => q.shadow_distance, x => { q.shadow_distance = x; ApplyQuality("menu"); }, 64f, 400f, 16f, "F0");
+            AddFloatRow(ref y, "Render scale", () => q.render_scale, x => { q.render_scale = x; ApplyQuality("menu"); }, 0.5f, 2f, 0.1f, "F2");
+            AddRow(ref y, "note", () => "render scale > 1 = supersampling", null, new Color(0.6f, 0.65f, 0.75f));
+        }
+
+        private void BuildEffectRows(ref float y)
+        {
+            var e = _cfg.effects;
+            AddChoiceRow(ref y, "Tonemapping", new[] { "none", "neutral", "aces" }, () => e.tonemapping ?? "none", s => { e.tonemapping = s; ApplyEffects("menu"); });
+            AddFloatRow(ref y, "Bloom intensity", () => e.bloom, x => { e.bloom = x; ApplyEffects("menu"); }, 0f, 2f, 0.1f, "F2");
+            AddFloatRow(ref y, "Bloom threshold", () => e.bloom_threshold, x => { e.bloom_threshold = x; ApplyEffects("menu"); }, 0f, 2f, 0.1f, "F2");
+            AddFloatRow(ref y, "Exposure", () => e.exposure, x => { e.exposure = x; ApplyEffects("menu"); }, -2f, 2f, 0.1f, "F2");
+            AddFloatRow(ref y, "Contrast", () => e.contrast, x => { e.contrast = x; ApplyEffects("menu"); }, -50f, 50f, 5f, "F0");
+            AddFloatRow(ref y, "Saturation", () => e.saturation, x => { e.saturation = x; ApplyEffects("menu"); }, -50f, 50f, 5f, "F0");
+        }
+
+        private void BuildTuningRows(ref float y)
+        {
+            var t = _cfg.tuning;
+            AddToggleRow(ref y, "Enable tuning", () => t.enabled, b => { t.enabled = b; ApplyTuningRuntime("menu"); });
+            AddFloatRow(ref y, "Attack scale", () => t.attack, x => { t.attack = x; ApplyTuningRuntime("menu"); }, 0.2f, 3f, 0.1f, "F2");
+            AddFloatRow(ref y, "Defence scale", () => t.defence, x => { t.defence = x; ApplyTuningRuntime("menu"); }, 0.2f, 3f, 0.1f, "F2");
+            AddFloatRow(ref y, "Drive scale", () => t.drive, x => { t.drive = x; ApplyTuningRuntime("menu"); }, 0.2f, 3f, 0.1f, "F2");
+            AddFloatRow(ref y, "Turret scale", () => t.turret, x => { t.turret = x; ApplyTuningRuntime("menu"); }, 0.2f, 3f, 0.1f, "F2");
+            AddFloatRow(ref y, "Reload scale", () => t.reload, x => { t.reload = x; ApplyTuningRuntime("menu"); }, 0.2f, 3f, 0.1f, "F2");
+            AddFloatRow(ref y, "Bullet scale", () => t.bullet, x => { t.bullet = x; ApplyTuningRuntime("menu"); }, 0.2f, 3f, 0.1f, "F2");
+            AddToggleRow(ref y, "Max tuning levels", () => t.max_levels, b => { t.max_levels = b; ApplyTuningRuntime("menu"); });
+            AddChoiceRow(ref y, "AI preset", new[] { "off", "green", "veteran", "ace" }, () => t.ai_preset ?? "off", s => { t.ai_preset = s; ApplyTuningRuntime("menu"); });
+            AddFloatRow(ref y, "AI lead accuracy", () => t.ai_lead_scale, x => { t.ai_lead_scale = x; ApplyTuningRuntime("menu"); }, 0.2f, 2.5f, 0.1f, "F2");
+            AddFloatRow(ref y, "AI open fire dist", () => t.ai_open_fire_scale, x => { t.ai_open_fire_scale = x; ApplyTuningRuntime("menu"); }, 0.2f, 2.5f, 0.1f, "F2");
+            AddToggleRow(ref y, "AI passive", () => t.ai_no_attack, b => { t.ai_no_attack = b; ApplyTuningRuntime("menu"); });
+            AddToggleRow(ref y, "Unlock all tanks", () => t.unlock_all, b => { t.unlock_all = b; ApplyTuningRuntime("menu"); });
+            AddIntRow(ref y, "Points", () => t.points, x => { t.points = x; ApplyTuningRuntime("menu"); }, 0, 200000, 5000);
+        }
+
+        private void UpdateMenu()
+        {
+            if (_root == null) return;
+            _root.SetActive(_open);
+            if (!_open) return;
+            if (_tab != _builtTab) RebuildMenu();
+
+            foreach (var r in _rows)
+                if (r.valueText != null && r.value != null) r.valueText.text = r.value();
+
+            try
+            {
+                Vector2 mp = Input.mousePosition;
+                var p = new Vector2(mp.x, Screen.height - mp.y);
+                if (!Input.GetMouseButtonDown(0)) return;
+                foreach (var r in _rows)
+                {
+                    if (r.onClick == null) continue;
+                    if (p.y < r.rect.y || p.y > r.rect.y + r.rect.height) continue;
+                    if (p.x < r.rect.x || p.x > r.rect.x + r.rect.width) continue;
+                    float rel = (p.x - r.rect.x) / r.rect.width;
+                    r.onClick(rel < 0.5f ? -1 : 1);
+                    break;   // the list may have been rebuilt
+                }
+            }
+            catch (Exception e) { LoggerInstance.Warning("menu input: " + e.Message); }
+        }
+
+        private void SetFireInputEnabled(bool enable)
+        {
+            try
+            {
+                if (!enable)
+                {
+                    _mutedFire.Clear();
+                    foreach (var fi in UnityEngine.Object.FindObjectsOfType<Cannon_Fire_Input_01_Mouse_CS>())
+                    {
+                        if (fi == null || !fi.enabled) continue;
+                        fi.enabled = false;
+                        _mutedFire.Add(fi);
+                    }
+                }
+                else
+                {
+                    foreach (var fi in _mutedFire) if (fi != null) fi.enabled = true;
+                    _mutedFire.Clear();
+                }
+            }
+            catch (Exception e) { LoggerInstance.Warning("fire mute: " + e.Message); }
+        }
+    }
+}

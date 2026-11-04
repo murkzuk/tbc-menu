@@ -1,0 +1,20 @@
+# build output
+bin/
+obj/
+dist/
+
+# machine-specific game path (run tools/find-game.ps1 or create Local.props)
+game.path
+Local.props
+
+# IDE
+.vs/
+*.user
+*.suo
+
+# reverse-engineering artefacts - keep these out of the repo
+dump/
+dump.cs
+il2cpp.h
+script.json
+*.dump.json

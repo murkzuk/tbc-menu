@@ -1,0 +1,28 @@
+<Project>
+
+  <!-- Optional local overrides. Not committed (see .gitignore). -->
+  <Import Project="$(MSBuildThisFileDirectory)Local.props" Condition="Exists('$(MSBuildThisFileDirectory)Local.props')" />
+
+  <PropertyGroup>
+    <Version>1.1.0</Version>
+
+    <!-- Game folder resolution order:
+         1. -p:GameDir="..." on the command line
+         2. TBC_GAME_DIR environment variable
+         3. Local.props  (<GameDir>...</GameDir>)
+         4. game.path    (one line, written by tools/find-game.ps1)
+         5. Steam's default install path from the registry
+         6. The usual C:\Program Files (x86)\Steam location
+    -->
+    <GameDir Condition="'$(GameDir)' == '' and '$(TBC_GAME_DIR)' != ''">$(TBC_GAME_DIR)</GameDir>
+    <GameDir Condition="'$(GameDir)' == '' and Exists('$(MSBuildThisFileDirectory)game.path')">$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)game.path').Trim())</GameDir>
+    <GameDir Condition="'$(GameDir)' == '' and '$(registry:HKEY_CURRENT_USER\Software\Valve\Steam@SteamPath)' != ''">$(registry:HKEY_CURRENT_USER\Software\Valve\Steam@SteamPath)\steamapps\common\Tank Battle Classic</GameDir>
+    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Tank Battle Classic</GameDir>
+  </PropertyGroup>
+
+  <Target Name="TbcValidateGameDir" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(GameDir)\MelonLoader\Il2CppAssemblies\Assembly-CSharp.dll')"
+           Text="Tank Battle Classic + MelonLoader not found at '$(GameDir)'. Install MelonLoader 0.7.3 into the game, then run tools/find-game.ps1 (or pass -p:GameDir=&quot;D:\path\Tank Battle Classic&quot;)." />
+  </Target>
+
+</Project>
