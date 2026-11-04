@@ -126,7 +126,7 @@ namespace TbcMenu
 
             float total = PanelY + 128f;
             if (_tab == 0) total += RowH * 7f;
-            else if (_tab == 1) total += RowH * 8f;
+            else if (_tab == 1) total += RowH * 14f;
             else if (_tab == 2) total += RowH * 6f;
             else if (_tab == 3) total += RowH * 7f;
             else total += RowH * 16f;
@@ -231,6 +231,24 @@ namespace TbcMenu
             AddChoiceRow(ref y, "Antialiasing", new[] { "off", "fxaa", "smaa", "taa" }, () => v.antialiasing ?? "off", s => { v.antialiasing = s; ApplyVisuals("menu"); });
             AddToggleRow(ref y, "Dithering", () => v.dithering, b => { v.dithering = b; ApplyVisuals("menu"); });
             AddIntRow(ref y, "Texture aniso", () => v.texture_aniso, x => { v.texture_aniso = x; _assetsDone.Clear(); ApplyAssets("menu"); }, 0, 16, 2);
+
+            var c = _cfg.camera;
+            AddRow(ref y, "Commander view (F6)", () => _commanderActive ? "ON" : "OFF", d =>
+            {
+                ToggleCommanderView();
+                c.commander_view = _commanderActive;
+            });
+            AddFloatRow(ref y, "Commander height", () => c.commander_height, x => { c.commander_height = x; ReapplyCommander(); }, 0.5f, 3f, 0.1f, "F2");
+            AddFloatRow(ref y, "Commander FOV", () => c.commander_fov, x => { c.commander_fov = x; ReapplyCommander(); }, 40f, 100f, 5f, "F0");
+            AddToggleRow(ref y, "Commander follows turret", () => c.commander_follow_turret, b => { c.commander_follow_turret = b; ReapplyCommander(); });
+            AddToggleRow(ref y, "Commander free look", () => c.commander_free_look, b => { c.commander_free_look = b; ReapplyCommander(); });
+        }
+
+        private void ReapplyCommander()
+        {
+            if (!_commanderActive) return;
+            ExitCommanderView();
+            EnterCommanderView();
         }
 
         private void BuildQualityRows(ref float y)

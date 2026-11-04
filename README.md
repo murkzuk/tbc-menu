@@ -56,10 +56,28 @@ clicking cannot fire.
 | Tab | What it controls |
 |---|---|
 | **Resolution** | window size, fullscreen mode, internal render scale (0 = keep the stock 854x480 buffer), live buffer readout |
-| **Visuals** | film grain, chromatic aberration, vignette, fog density, antialiasing (off/fxaa/smaa/taa), dithering, texture aniso |
+| **Visuals** | film grain, chromatic aberration, vignette, fog density, antialiasing (off/fxaa/smaa/taa), dithering, texture aniso, **commander view** |
 | **Quality** | MSAA 1-8x, main light shadowmap 1024-4096, soft shadow quality, shadow distance, render scale (supersampling above 1) |
 | **Effects** | tonemapping (none/neutral/ACES), bloom + threshold, exposure, contrast, saturation |
 | **Tuning** | tuning multiplier scales, max tuning levels, AI preset and scales, AI passive, unlock all tanks, points |
+
+## Commander view (F6)
+
+The game only has third person, the gun sight and the map. **F6** adds a first-person seat on the
+turret: `Camera (Main)` is detached from its pivot and re-parented to the tank's `Turret_Base`, with
+the third-person camera scripts suspended while it is active.
+
+![commander view](docs/screenshot-commander.jpg)
+
+| Setting | Meaning |
+|---|---|
+| `commander_height` / `commander_forward` | eye offset from the turret origin, in metres |
+| `commander_fov` | field of view (30-110) |
+| `commander_free_look` | `false` = the view rides the turret and the mouse trains the gun as usual. `true` = the mouse looks around while the gun stays put (`Aiming_Control_CS` is suspended; firing still works) |
+| `commander_sensitivity` | free-look sensitivity |
+
+Notes: switching to the gun sight or changing scene drops you back to third person; `F6` toggles at
+any time. The tank's own body is what you are sitting on, so you see the deck and barrel in frame.
 
 ## Defaults
 

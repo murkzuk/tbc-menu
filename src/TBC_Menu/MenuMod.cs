@@ -13,7 +13,7 @@ using UnityEngine.UI;
 using Il2CppChobiAssets.PTM;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 
-[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.1.2", "murkzuk")]
+[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.2.0", "murkzuk")]
 [assembly: MelonAdditionalCredits("Built by DeepSeek at murkzuk's request")]
 [assembly: MelonGame(null, null)]
 
@@ -52,8 +52,14 @@ namespace TbcMenu
             ApplyAll("startup");
         }
 
+        public override void OnLateUpdate()
+        {
+            UpdateCommanderView();
+        }
+
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
+            ExitCommanderView();      // scene objects are gone; re-enter with F6
             if (!_cfg.enabled) return;
             ApplyAll("scene " + sceneName);
             _nextTick = 0f;
@@ -64,6 +70,7 @@ namespace TbcMenu
             try
             {
                 if (Input.GetKeyDown(KeyCode.F7)) Toggle();
+                if (Input.GetKeyDown(KeyCode.F6)) ToggleCommanderView();
             }
             catch (Exception e) { LoggerInstance.Warning("hotkey: " + e.Message); }
 

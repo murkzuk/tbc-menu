@@ -56,6 +56,30 @@ Tonemapping, ColorAdjustments, WhiteBalance, DepthOfField, MotionBlur and LensDi
 their shaders (`Hidden/Universal Render Pipeline/Bloom`, `UberPost`, `LutBuilder`, ...) are present in the
 build.
 
+## The camera stack
+
+Three modes only - third person, gun sight, map:
+
+- `Camera_Manager_CS` (singleton) holds `Camera_Mode`, `Available_Gun_Camera` and references to the
+  pivot / gun / map / obstacle scripts. `Switch_Camera_Mode(bool)` is private; `Set_Camera_Points` is public.
+- `Camera_Points_Manager_CS` is per tank and holds the authored `mainCameraPoint` and `gunCameraPoint`.
+- `Camera_Pivot_CS` follows the body in `LateUpdate` (`Set_Camera_Point`, `Switch_Main_Camera`);
+  `Camera_Rotation_CS` rotates the pivot (`Rotate_TPV`, static `Instance`); `Camera_Avoid_Obstacle_CS`
+  sphere-casts to pull the camera in; `Camera_Zoom_CS` owns `minFOV`/`maxFOV`.
+- `Gun_Camera_CS` is the gunner sight with its own reticle canvases and `Switch_Gun_Camera(bool, bool)`.
+
+There is no first-person or commander mode, which is why `TBC_Menu` re-parents `Camera (Main)` to the
+turret and suspends `Camera_Pivot_CS`, `Camera_Rotation_CS`, `Camera_Avoid_Obstacle_CS` and
+`Camera_Zoom_CS` while it is active.
+
+## The game already ships a vehicle tuning screen
+
+The mission menu has a **Player Vehicle Tuning** panel with exactly six multipliers, plus an
+**Experimental** submenu: **Firepower, Armor, Speed, Gun Traverse, Reload Speed, Shell Velocity**
+(each shown as `x1.0` by default) and a Score Multiplier. These map one-to-one onto
+`Tuning_Value`'s six tables, so the mod's Tuning tab is not inventing a system - it scales the same
+curves without having to back out to the mission menu.
+
 ## Things that are not worth trying
 
 - **SSAO** - the renderer has zero features and the SSAO shaders are not in the loaded set.

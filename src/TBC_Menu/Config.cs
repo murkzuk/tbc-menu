@@ -70,6 +70,17 @@ namespace TbcMenu
         public float saturation = 0f;
     }
 
+    public class CameraCfg
+    {
+        public bool commander_view = false;      // auto-enter on a mission scene
+        public float commander_height = 1.2f;    // metres above the turret origin
+        public float commander_forward = 0.2f;   // metres forward from the turret origin
+        public float commander_fov = 70f;
+        public float commander_sensitivity = 2f;
+        public bool commander_follow_turret = true; // view yaw is relative to the turret
+        public bool commander_free_look = false;    // true: mouse looks around instead of turning the gun
+    }
+
     public class MenuConfig
     {
         public bool enabled = true;
@@ -79,6 +90,7 @@ namespace TbcMenu
         public QualityCfg quality = new QualityCfg();
         public EffectsCfg effects = new EffectsCfg();
         public TuningCfg tuning = new TuningCfg();
+        public CameraCfg camera = new CameraCfg();
     }
 
 
