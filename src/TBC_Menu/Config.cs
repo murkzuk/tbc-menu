@@ -75,6 +75,8 @@ namespace TbcMenu
         public bool commander_view = false;      // auto-enter on a mission scene
         public float commander_height = 1.2f;    // metres above the turret origin
         public float commander_forward = 0.2f;   // metres forward from the turret origin
+        public float commander_right = 0f;       // metres to the right of the turret origin
+        public float commander_nudge_speed = 1.5f; // metres per second while adjusting
         public float commander_fov = 70f;
         public float commander_sensitivity = 2f;
         public bool commander_follow_turret = true; // view yaw is relative to the turret

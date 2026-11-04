@@ -188,6 +188,7 @@ namespace TbcMenu
                 catch { }
 
                 var cfg = _cfg.camera;
+                ApplyCommanderOffsets(Time.deltaTime);
                 float sens = cfg == null ? 2f : Mathf.Clamp(cfg.commander_sensitivity, 0.2f, 10f);
                 Vector2 d = ReadMouseDelta();
                 if (d.x != 0f || d.y != 0f)
@@ -206,6 +207,36 @@ namespace TbcMenu
                 LoggerInstance.Warning("commander update: " + e.Message);
                 _commanderActive = false;
             }
+        }
+
+        // Applies the offsets every frame, so menu edits and in-game nudging take effect live.
+        private void ApplyCommanderOffsets(float dt)
+        {
+            var cfg = _cfg.camera;
+            if (cfg == null || _cmdAnchor == null) return;
+
+            float step = Mathf.Clamp(cfg.commander_nudge_speed, 0.1f, 10f) * dt;
+            if (Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt))
+            {
+                if (Input.GetKey(KeyCode.UpArrow)) cfg.commander_forward += step;
+                if (Input.GetKey(KeyCode.DownArrow)) cfg.commander_forward -= step;
+                if (Input.GetKey(KeyCode.LeftArrow)) cfg.commander_right -= step;
+                if (Input.GetKey(KeyCode.RightArrow)) cfg.commander_right += step;
+                if (Input.GetKey(KeyCode.PageUp)) cfg.commander_height += step;
+                if (Input.GetKey(KeyCode.PageDown)) cfg.commander_height -= step;
+
+                float scroll = 0f;
+                try { scroll = Input.mouseScrollDelta.y; } catch { }
+                if (Mathf.Abs(scroll) > 0.01f) cfg.commander_fov = Mathf.Clamp(cfg.commander_fov - scroll * 3f, 30f, 110f);
+
+                if (Input.GetKeyDown(KeyCode.S)) { Save(); LoggerInstance.Msg("commander offsets saved"); }
+            }
+
+            cfg.commander_right = Mathf.Clamp(cfg.commander_right, -4f, 4f);
+            cfg.commander_forward = Mathf.Clamp(cfg.commander_forward, -4f, 4f);
+            cfg.commander_height = Mathf.Clamp(cfg.commander_height, 0.1f, 5f);
+
+            _cmdAnchor.transform.localPosition = new Vector3(cfg.commander_right, cfg.commander_height, cfg.commander_forward);
         }
 
         private Vector2 ReadMouseDelta()
