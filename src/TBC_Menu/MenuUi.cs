@@ -126,7 +126,7 @@ namespace TbcMenu
 
             float total = PanelY + 128f;
             if (_tab == 0) total += RowH * 7f;
-            else if (_tab == 1) total += RowH * 18f;
+            else if (_tab == 1) total += RowH * 20f;
             else if (_tab == 2) total += RowH * 6f;
             else if (_tab == 3) total += RowH * 7f;
             else total += RowH * 16f;
@@ -238,11 +238,13 @@ namespace TbcMenu
                 ToggleCommanderView();
                 c.commander_view = _commanderActive;
             });
-            AddFloatRow(ref y, "Commander height (Y)", () => c.commander_height, x => c.commander_height = x, 0.1f, 5f, 0.05f, "F2");
-            AddFloatRow(ref y, "Commander forward (Z)", () => c.commander_forward, x => c.commander_forward = x, -2f, 4f, 0.05f, "F2");
-            AddFloatRow(ref y, "Commander right (X)", () => c.commander_right, x => c.commander_right = x, -2f, 2f, 0.05f, "F2");
-            AddFloatRow(ref y, "Commander FOV", () => c.commander_fov, x => c.commander_fov = x, 30f, 110f, 2f, "F0");
-            AddRow(ref y, "Alt + arrows / PgUpDn / wheel", () => "= move eye", null, new Color(0.6f, 0.65f, 0.75f));
+            AddRow(ref y, "Editing", () => SeatLabel, null, new Color(0.6f, 0.65f, 0.75f));
+            AddFloatRow(ref y, "Commander height (Y)", () => SeatHeight, x => SeatHeight = x, 0.1f, 5f, 0.05f, "F2");
+            AddFloatRow(ref y, "Commander forward (Z)", () => SeatForward, x => SeatForward = x, -2f, 4f, 0.05f, "F2");
+            AddFloatRow(ref y, "Commander right (X)", () => SeatRight, x => SeatRight = x, -2f, 2f, 0.05f, "F2");
+            AddFloatRow(ref y, "Commander FOV", () => SeatFov, x => SeatFov = x, 30f, 110f, 2f, "F0");
+            AddRow(ref y, "Alt + arrows / PgUpDn / wheel", () => "move eye", null, new Color(0.6f, 0.65f, 0.75f));
+            AddRow(ref y, "Alt + S", () => "save seat", null, new Color(0.6f, 0.65f, 0.75f));
             AddToggleRow(ref y, "Commander follows turret", () => c.commander_follow_turret, b => { c.commander_follow_turret = b; ReapplyCommander(); });
             AddToggleRow(ref y, "Commander free look", () => c.commander_free_look, b => { c.commander_free_look = b; ReapplyCommander(); });
             AddFloatRow(ref y, "Commander nudge speed", () => c.commander_nudge_speed, x => c.commander_nudge_speed = x, 0.2f, 6f, 0.1f, "F1");

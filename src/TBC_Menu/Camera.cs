@@ -22,10 +22,41 @@ namespace TbcMenu
         private Vector3 _cmdOriginalLocalPos;
         private Quaternion _cmdOriginalLocalRot;
         private float _cmdOriginalFov;
+        private SeatCfg _cmdSeat;          // the seat being used / edited right now
+        private string _cmdTankKey;
         private float _cmdBaseYaw;
         private float _cmdYaw;
         private float _cmdPitch;
         private readonly List<Behaviour> _cmdMuted = new List<Behaviour>();
+
+        // menu accessors: edit the current tank's seat when the view is open, else the defaults
+        private float SeatHeight
+        {
+            get => _cmdSeat != null ? _cmdSeat.height : _cfg.camera.commander_height;
+            set { if (_cmdSeat != null) _cmdSeat.height = value; else _cfg.camera.commander_height = value; }
+        }
+
+        private float SeatForward
+        {
+            get => _cmdSeat != null ? _cmdSeat.forward : _cfg.camera.commander_forward;
+            set { if (_cmdSeat != null) _cmdSeat.forward = value; else _cfg.camera.commander_forward = value; }
+        }
+
+        private float SeatRight
+        {
+            get => _cmdSeat != null ? _cmdSeat.right : _cfg.camera.commander_right;
+            set { if (_cmdSeat != null) _cmdSeat.right = value; else _cfg.camera.commander_right = value; }
+        }
+
+        private float SeatFov
+        {
+            get => _cmdSeat != null ? _cmdSeat.fov : _cfg.camera.commander_fov;
+            set { if (_cmdSeat != null) _cmdSeat.fov = value; else _cfg.camera.commander_fov = value; }
+        }
+
+        private string SeatLabel => _commanderActive
+            ? "seat: " + _cmdTankKey
+            : "seat: defaults (all tanks)";
 
         private void ToggleCommanderView()
         {
@@ -77,6 +108,10 @@ namespace TbcMenu
                                                                  Mathf.Clamp(cfg.commander_forward, -2f, 4f));
                 _cmdAnchor.transform.localRotation = Quaternion.identity;
 
+                _cmdTankKey = TankKey(tankRoot);
+                _cmdSeat = ResolveSeat(_cmdTankKey);
+                LoggerInstance.Msg($"commander seat for '{_cmdTankKey}': Y={_cmdSeat.height:F2} Z={_cmdSeat.forward:F2} X={_cmdSeat.right:F2} fov={_cmdSeat.fov:F0}");
+
                 _cmdCamera = cam;
                 _cmdOriginalLocalPos = cam.transform.localPosition;
                 _cmdOriginalLocalRot = cam.transform.localRotation;
@@ -89,7 +124,7 @@ namespace TbcMenu
 
                 MuteCameraScripts(true);
 
-                cam.fieldOfView = Mathf.Clamp(cfg.commander_fov, 30f, 110f);
+                cam.fieldOfView = Mathf.Clamp(_cmdSeat.fov, 30f, 110f);
                 PlaceCommanderCamera();
 
                 _commanderActive = true;
@@ -117,6 +152,7 @@ namespace TbcMenu
             try { if (_cmdAnchor != null) UnityEngine.Object.Destroy(_cmdAnchor); } catch { }
             _cmdAnchor = null;
             _cmdCamera = null;
+            _cmdSeat = null;
             _commanderActive = false;
             LoggerInstance.Msg("commander view off");
         }
@@ -213,30 +249,66 @@ namespace TbcMenu
         private void ApplyCommanderOffsets(float dt)
         {
             var cfg = _cfg.camera;
-            if (cfg == null || _cmdAnchor == null) return;
+            if (cfg == null || _cmdAnchor == null || _cmdSeat == null) return;
 
             float step = Mathf.Clamp(cfg.commander_nudge_speed, 0.1f, 10f) * dt;
             if (Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt))
             {
-                if (Input.GetKey(KeyCode.UpArrow)) cfg.commander_forward += step;
-                if (Input.GetKey(KeyCode.DownArrow)) cfg.commander_forward -= step;
-                if (Input.GetKey(KeyCode.LeftArrow)) cfg.commander_right -= step;
-                if (Input.GetKey(KeyCode.RightArrow)) cfg.commander_right += step;
-                if (Input.GetKey(KeyCode.PageUp)) cfg.commander_height += step;
-                if (Input.GetKey(KeyCode.PageDown)) cfg.commander_height -= step;
+                if (Input.GetKey(KeyCode.UpArrow)) _cmdSeat.forward += step;
+                if (Input.GetKey(KeyCode.DownArrow)) _cmdSeat.forward -= step;
+                if (Input.GetKey(KeyCode.LeftArrow)) _cmdSeat.right -= step;
+                if (Input.GetKey(KeyCode.RightArrow)) _cmdSeat.right += step;
+                if (Input.GetKey(KeyCode.PageUp)) _cmdSeat.height += step;
+                if (Input.GetKey(KeyCode.PageDown)) _cmdSeat.height -= step;
 
                 float scroll = 0f;
                 try { scroll = Input.mouseScrollDelta.y; } catch { }
-                if (Mathf.Abs(scroll) > 0.01f) cfg.commander_fov = Mathf.Clamp(cfg.commander_fov - scroll * 3f, 30f, 110f);
+                if (Mathf.Abs(scroll) > 0.01f) _cmdSeat.fov = Mathf.Clamp(_cmdSeat.fov - scroll * 3f, 30f, 110f);
 
-                if (Input.GetKeyDown(KeyCode.S)) { Save(); LoggerInstance.Msg("commander offsets saved"); }
+                if (Input.GetKeyDown(KeyCode.S))
+                {
+                    Save();
+                    LoggerInstance.Msg($"saved seat for '{_cmdTankKey}' (Y={_cmdSeat.height:F2} Z={_cmdSeat.forward:F2} X={_cmdSeat.right:F2} fov={_cmdSeat.fov:F0})");
+                }
             }
 
-            cfg.commander_right = Mathf.Clamp(cfg.commander_right, -4f, 4f);
-            cfg.commander_forward = Mathf.Clamp(cfg.commander_forward, -4f, 4f);
-            cfg.commander_height = Mathf.Clamp(cfg.commander_height, 0.1f, 5f);
+            _cmdSeat.right = Mathf.Clamp(_cmdSeat.right, -4f, 4f);
+            _cmdSeat.forward = Mathf.Clamp(_cmdSeat.forward, -4f, 4f);
+            _cmdSeat.height = Mathf.Clamp(_cmdSeat.height, 0.1f, 5f);
 
-            _cmdAnchor.transform.localPosition = new Vector3(cfg.commander_right, cfg.commander_height, cfg.commander_forward);
+            _cmdAnchor.transform.localPosition = new Vector3(_cmdSeat.right, _cmdSeat.height, _cmdSeat.forward);
+        }
+
+        // stable per-tank key: the vehicle's own tank name, else the object name without "(Clone)"
+        private string TankKey(Transform tankRoot)
+        {
+            try
+            {
+                var ids = tankRoot.GetComponentInChildren<ID_Settings_CS>(true);
+                if (ids != null && ids.Tank_Prop != null && !string.IsNullOrEmpty(ids.Tank_Prop.Tank_Name))
+                    return ids.Tank_Prop.Tank_Name;
+            }
+            catch { }
+            string n = tankRoot.name ?? "unknown";
+            int i = n.IndexOf("(Clone)", StringComparison.OrdinalIgnoreCase);
+            return (i > 0 ? n.Substring(0, i) : n).Trim();
+        }
+
+        private SeatCfg ResolveSeat(string key)
+        {
+            var cfg = _cfg.camera;
+            if (cfg.per_tank != null && !string.IsNullOrEmpty(key) && cfg.per_tank.TryGetValue(key, out var seat) && seat != null)
+                return seat;
+            var fresh = new SeatCfg
+            {
+                height = cfg.commander_height,
+                forward = cfg.commander_forward,
+                right = cfg.commander_right,
+                fov = cfg.commander_fov,
+            };
+            if (cfg.per_tank == null) cfg.per_tank = new System.Collections.Generic.Dictionary<string, SeatCfg>();
+            if (!string.IsNullOrEmpty(key)) cfg.per_tank[key] = fresh;
+            return fresh;
         }
 
         private Vector2 ReadMouseDelta()

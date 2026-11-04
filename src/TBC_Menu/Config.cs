@@ -70,6 +70,14 @@ namespace TbcMenu
         public float saturation = 0f;
     }
 
+    public class SeatCfg
+    {
+        public float height = 1.2f;
+        public float forward = 0.2f;
+        public float right = 0f;
+        public float fov = 70f;
+    }
+
     public class CameraCfg
     {
         public bool commander_view = false;      // auto-enter on a mission scene
@@ -81,6 +89,11 @@ namespace TbcMenu
         public float commander_sensitivity = 2f;
         public bool commander_follow_turret = true; // view yaw is relative to the turret
         public bool commander_free_look = false;    // true: mouse looks around instead of turning the gun
+
+        // per-tank seats: keyed by the vehicle's tank name (e.g. "T-34/76").
+        // tanks without an entry fall back to the commander_* values above.
+        public System.Collections.Generic.Dictionary<string, SeatCfg> per_tank =
+            new System.Collections.Generic.Dictionary<string, SeatCfg>();
     }
 
     public class MenuConfig
