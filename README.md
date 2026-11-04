@@ -64,8 +64,13 @@ clicking cannot fire.
 ## Commander view (F6)
 
 The game only has third person, the gun sight and the map. **F6** adds a first-person seat on the
-turret: `Camera (Main)` is detached from its pivot and re-parented to the tank's `Turret_Base`, with
-the third-person camera scripts suspended while it is active.
+turret.
+
+The camera keeps its original parent — it must **not** be parented to the turret. This game slaves
+the turret to the camera's forward direction (`Aiming_Control_CS`), so a turret-parented camera
+creates a feedback loop and the turret spins endlessly (fixed in 1.2.1). Instead the observer point
+is placed on the turret and the camera's world pose is driven directly every frame, with
+`Camera_Pivot_CS`, `Camera_Rotation_CS`, `Camera_Avoid_Obstacle_CS` and `Camera_Zoom_CS` suspended.
 
 ![commander view](docs/screenshot-commander.jpg)
 

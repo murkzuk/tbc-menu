@@ -1,6 +1,11 @@
 // Commander view: a first-person seat on the turret, alongside the game's
-// third-person camera and gun sight. The game has no such mode, so this
-// detaches Camera (Main) from its pivot and drives it directly.
+// third-person camera and gun sight.
+//
+// Important: the camera must NOT be parented to the turret. This game slaves the
+// turret to the camera's forward direction (Aiming_Control_CS), so a
+// turret-parented camera creates a feedback loop and the turret spins forever.
+// Instead the camera keeps its original parent and we drive its world pose
+// directly each LateUpdate.
 using System;
 using System.Collections.Generic;
 using MelonLoader;
@@ -14,10 +19,10 @@ namespace TbcMenu
         private bool _commanderActive;
         private Camera _cmdCamera;
         private GameObject _cmdAnchor;
-        private Transform _cmdOriginalParent;
         private Vector3 _cmdOriginalLocalPos;
         private Quaternion _cmdOriginalLocalRot;
         private float _cmdOriginalFov;
+        private float _cmdBaseYaw;
         private float _cmdYaw;
         private float _cmdPitch;
         private readonly List<Behaviour> _cmdMuted = new List<Behaviour>();
@@ -36,7 +41,6 @@ namespace TbcMenu
                 var cfg = _cfg.camera;
                 if (cfg == null) return;
 
-                // player tank -> turret
                 Transform tankRoot = null;
                 foreach (var p in UnityEngine.Object.FindObjectsOfType<Drive_Control_Input_01_Player_CS>())
                 {
@@ -47,14 +51,10 @@ namespace TbcMenu
                 }
                 if (tankRoot == null) { LoggerInstance.Warning("commander view: no player tank found"); return; }
 
-                // prefer the turret so the view turns with it, then the gun, then the hull
-                Transform mount = FirstTransform<Turret_Base_CS>(tankRoot);
-                if (mount == null) mount = FirstTransform<Turret_Horizontal_CS>(tankRoot);
-                if (mount == null) mount = FirstTransform<Turret_Base_CS>(tankRoot, true);
-                if (mount == null) mount = FirstTransform<Cannon_Base_CS>(tankRoot);
-                if (mount == null) mount = tankRoot;
+                Transform turret = FirstTransform<Turret_Base_CS>(tankRoot);
+                if (turret == null) turret = FirstTransform<Turret_Horizontal_CS>(tankRoot);
+                Transform mount = (cfg.commander_follow_turret && turret != null) ? turret : tankRoot;
 
-                // the 3D camera is the one carrying the letterbox script
                 Camera cam = null;
                 foreach (var c in Camera.allCameras)
                 {
@@ -64,7 +64,6 @@ namespace TbcMenu
                 if (cam == null) cam = Camera.main;
                 if (cam == null) { LoggerInstance.Warning("commander view: no main camera"); return; }
 
-                // leave the gun sight if the player is in it
                 try
                 {
                     var mgr = Camera_Manager_CS.Instance;
@@ -79,22 +78,22 @@ namespace TbcMenu
                 _cmdAnchor.transform.localRotation = Quaternion.identity;
 
                 _cmdCamera = cam;
-                _cmdOriginalParent = cam.transform.parent;
                 _cmdOriginalLocalPos = cam.transform.localPosition;
                 _cmdOriginalLocalRot = cam.transform.localRotation;
                 _cmdOriginalFov = cam.fieldOfView;
+
+                // start looking where the third-person camera was looking
+                _cmdBaseYaw = cam.transform.eulerAngles.y;
                 _cmdYaw = 0f;
                 _cmdPitch = 0f;
 
                 MuteCameraScripts(true);
 
-                cam.transform.SetParent(_cmdAnchor.transform, false);
-                cam.transform.localPosition = Vector3.zero;
-                cam.transform.localRotation = Quaternion.Euler(_cmdPitch, _cmdYaw, 0f);
                 cam.fieldOfView = Mathf.Clamp(cfg.commander_fov, 30f, 110f);
+                PlaceCommanderCamera();
 
                 _commanderActive = true;
-                LoggerInstance.Msg($"commander view on (tank='{tankRoot.name}', mount='{mount.name}')");
+                LoggerInstance.Msg($"commander view on (tank='{tankRoot.name}', mount='{mount.name}', turret='{(turret == null ? "none" : turret.name)}')");
             }
             catch (Exception e) { LoggerInstance.Warning("commander view failed: " + e.Message); }
         }
@@ -106,7 +105,6 @@ namespace TbcMenu
             {
                 if (_cmdCamera != null)
                 {
-                    _cmdCamera.transform.SetParent(_cmdOriginalParent, false);
                     _cmdCamera.transform.localPosition = _cmdOriginalLocalPos;
                     _cmdCamera.transform.localRotation = _cmdOriginalLocalRot;
                     _cmdCamera.fieldOfView = _cmdOriginalFov;
@@ -123,16 +121,11 @@ namespace TbcMenu
             LoggerInstance.Msg("commander view off");
         }
 
-        private Transform FirstTransform<T>(Transform root, bool includeInactive = false) where T : Component
+        private void PlaceCommanderCamera()
         {
-            try
-            {
-                var comps = root.GetComponentsInChildren<T>(includeInactive || true);
-                foreach (var c in comps)
-                    if (c != null) return c.transform;
-            }
-            catch { }
-            return null;
+            if (_cmdCamera == null || _cmdAnchor == null) return;
+            _cmdCamera.transform.SetPositionAndRotation(_cmdAnchor.transform.position,
+                                                        Quaternion.Euler(_cmdPitch, _cmdBaseYaw + _cmdYaw, 0f));
         }
 
         private void MuteCameraScripts(bool mute)
@@ -140,13 +133,12 @@ namespace TbcMenu
             if (mute)
             {
                 _cmdMuted.Clear();
-                AddMuted<Camera_Pivot_CS>();
-                AddMuted<Camera_Rotation_CS>();
-                AddMuted<Camera_Avoid_Obstacle_CS>();
-                AddMuted<Camera_Zoom_CS>();
-                // free look: the mouse drives the view, so stop it from also training the gun.
-                // Firing still works - that is a separate input script.
-                if (_cfg.camera != null && _cfg.camera.commander_free_look) AddMuted<Aiming_Control_CS>();
+                AddMuted<Camera_Pivot_CS>();          // stops it moving the camera
+                AddMuted<Camera_Rotation_CS>();       // we drive the yaw ourselves
+                AddMuted<Camera_Avoid_Obstacle_CS>(); // no pull-back in first person
+                AddMuted<Camera_Zoom_CS>();           // we own the FOV
+                if (_cfg.camera != null && _cfg.camera.commander_free_look)
+                    AddMuted<Aiming_Control_CS>();    // free look: gun stays put, firing still works
             }
             else
             {
@@ -170,6 +162,17 @@ namespace TbcMenu
             catch (Exception e) { LoggerInstance.Warning("mute " + typeof(T).Name + ": " + e.Message); }
         }
 
+        private Transform FirstTransform<T>(Transform root) where T : Component
+        {
+            try
+            {
+                foreach (var c in root.GetComponentsInChildren<T>(true))
+                    if (c != null) return c.transform;
+            }
+            catch { }
+            return null;
+        }
+
         private void UpdateCommanderView()
         {
             if (!_commanderActive) return;
@@ -177,7 +180,6 @@ namespace TbcMenu
             {
                 if (_cmdCamera == null || _cmdAnchor == null) { _commanderActive = false; return; }
 
-                // if the game switched to the gun sight, hand the camera back
                 try
                 {
                     var mgr = Camera_Manager_CS.Instance;
@@ -186,24 +188,15 @@ namespace TbcMenu
                 catch { }
 
                 var cfg = _cfg.camera;
-                bool free = cfg != null && cfg.commander_free_look;
+                float sens = cfg == null ? 2f : Mathf.Clamp(cfg.commander_sensitivity, 0.2f, 10f);
+                Vector2 d = ReadMouseDelta();
+                if (d.x != 0f || d.y != 0f)
+                {
+                    _cmdYaw += d.x * sens;
+                    _cmdPitch = Mathf.Clamp(_cmdPitch - d.y * sens, -85f, 85f);
+                }
 
-                if (free)
-                {
-                    float sens = cfg == null ? 2f : Mathf.Clamp(cfg.commander_sensitivity, 0.2f, 10f);
-                    Vector2 d = ReadMouseDelta();
-                    if (d.x != 0f || d.y != 0f)
-                    {
-                        _cmdYaw += d.x * sens;
-                        _cmdPitch = Mathf.Clamp(_cmdPitch - d.y * sens, -85f, 85f);
-                    }
-                    _cmdCamera.transform.localRotation = Quaternion.Euler(_cmdPitch, _cmdYaw, 0f);
-                }
-                else
-                {
-                    // locked view: the turret carries the camera, no extra input
-                    _cmdCamera.transform.localRotation = Quaternion.identity;
-                }
+                PlaceCommanderCamera();
 
                 float fov = cfg == null ? 70f : Mathf.Clamp(cfg.commander_fov, 30f, 110f);
                 if (Mathf.Abs(_cmdCamera.fieldOfView - fov) > 0.01f) _cmdCamera.fieldOfView = fov;

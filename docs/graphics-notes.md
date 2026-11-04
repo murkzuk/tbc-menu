@@ -68,9 +68,12 @@ Three modes only - third person, gun sight, map:
   sphere-casts to pull the camera in; `Camera_Zoom_CS` owns `minFOV`/`maxFOV`.
 - `Gun_Camera_CS` is the gunner sight with its own reticle canvases and `Switch_Gun_Camera(bool, bool)`.
 
-There is no first-person or commander mode, which is why `TBC_Menu` re-parents `Camera (Main)` to the
-turret and suspends `Camera_Pivot_CS`, `Camera_Rotation_CS`, `Camera_Avoid_Obstacle_CS` and
-`Camera_Zoom_CS` while it is active.
+There is no first-person or commander mode. Adding one is trickier than it looks: the turret is
+**slaved to the camera's forward direction**, so parenting the camera to the turret makes the turret
+chase its own child and spin forever. The working approach is to leave the camera's parent alone,
+place an observer point on `Turret_Base` and drive the camera's world pose each `LateUpdate` while
+`Camera_Pivot_CS`, `Camera_Rotation_CS`, `Camera_Avoid_Obstacle_CS` and `Camera_Zoom_CS` are suspended.
+Muting `Aiming_Control_CS` additionally gives free look with the gun staying put.
 
 ## The game already ships a vehicle tuning screen
 
