@@ -7,6 +7,8 @@ filter, URP quality settings, and optional gameplay/AI tuning.
 Unofficial. Contains no game content. Buy the game:
 https://store.steampowered.com/app/5086560/Tank_Battle_Classic/
 
+Author: **murkzuk** - https://github.com/murkzuk
+
 ![menu](docs/screenshot-menu.png)
 
 ## Why this exists

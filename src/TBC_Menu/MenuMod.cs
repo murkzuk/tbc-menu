@@ -13,7 +13,7 @@ using UnityEngine.UI;
 using Il2CppChobiAssets.PTM;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 
-[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.1.0", "dsh")]
+[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.1.1", "murkzuk")]
 [assembly: MelonGame(null, null)]
 
 namespace TbcMenu
