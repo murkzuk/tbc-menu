@@ -1,20 +1,26 @@
 # Handover
 
-Everything needed to pick this up cold. Mod version **1.6.0** (per-tank vehicle overrides).
+Everything needed to pick this up cold. Mod version **1.7.0** (native-resolution rendering),
+last commit `989143a`. Two installed custom scenarios. Read this, then `README.md`, `TODO.md`,
+`docs/vehicle-model.md` and `docs/terrain-and-scenarios.md`.
 
 ## The two repos
 
 | Repo | What | Licence |
 |---|---|---|
 | https://github.com/murkzuk/tbc-menu | **This project** - MelonLoader mod for Tank Battle Classic | MIT |
-| https://github.com/fiermanb/TankBattleMissionEditor | **Third party** - mission/map editor for the same game, by fierman | GPL-3.0 |
+| https://github.com/fiermanb/TankBattleMissionEditor | **Third party** - mission/map editor for the same game, by fierman | **GPL-3.0** |
 
 Local copies:
 
-- mod source: `K:\TvTDeepseek\tbc_menu_repo` (git, pushed, clean)
-- mission editor (release build): `K:\TvTDeepseek\tbc_mod\missioneditor\app\TankBattleMissionEditor\TankBattleMissionEditor.exe`
-- scratch mods / experiments: `K:\TvTDeepseek\tbc_mod`
-- IL2CPP dump + dumper: `K:\TvTDeepseek\tbc_modding\` (`dump.cs`, `script.json`, `il2cpp.h`, `DummyDll\`) - **do not publish** (derived from game code)
+- mod source: `K:\TvTDeepseek\tbc_menu_repo` (git, clean, pushed)
+- mission editor, installed release: `K:\TvTDeepseek\tbc_mod\missioneditor\app\TankBattleMissionEditor\`
+  (`TankBattleMissionEditor.exe`, `settings.json` already points at the game, `Scenarios\`, `backups\`)
+- mission editor, **source clone**: `K:\TvTDeepseek\scratch\tbcme` - its Python modules are imported
+  headlessly (see below). GPL-3.0: do not copy its code into the MIT repo.
+- IL2CPP dump + tools: `K:\TvTDeepseek\tbc_modding\Il2CppDumper\` (`dump.cs`, `script.json`,
+  `il2cpp.h`, `DummyDll\`) - **do not publish** (derived from game code)
+- scratch / experiments / notes: `K:\TvTDeepseek\scratch` (see "Automation harness")
 
 ## The game
 
@@ -22,153 +28,181 @@ Local copies:
 - Version **1.2.0**, Unity **6000.2.10f1**, x86_64, D3D12, URP
 - **IL2CPP**, metadata **v31**, unencrypted, unobfuscated
   - `global-metadata.dat` sha256 `510415579aab976aca8135b23a69640dfa7ebb00f5610fb15ff02e7568b925d6`
-- No anti-cheat, no DRM wrapper, no Steamworks (Steam Auto-Cloud only, no Workshop)
-- Serialized assets have **stripped type trees** - static asset editing needs a typetree source
-- Save data: plain JSON at `%USERPROFILE%\AppData\LocalLow\Chobi Softwear\Tank Battle Classic\save.json` (plus `save_backup.json`)
-- Built on **Physics Tank Maker** (`ChobiAssets.PTM`). The user owns PTM; its source is at
-  `I:\PTM\PTMtest\Assets\Physics Tank Maker` (v3.2). **Never copy PTM source into the public repo.**
+- No anti-cheat, no DRM wrapper, no Steamworks (Auto-Cloud only, no Workshop)
+- Serialized assets have **stripped type trees** - any asset editor must regenerate the field
+  layouts from `GameAssembly.dll` + `global-metadata.dat` and validate per object.
+- Save data: plain JSON at `%USERPROFILE%\AppData\LocalLow\Chobi Softwear\Tank Battle Classic\save.json`
+- Built on **Physics Tank Maker** (`ChobiAssets.PTM`). The user owns PTM (source at
+  `I:\PTM\PTMtest\Assets\Physics Tank Maker`, v3.2). **Never copy PTM source into the public repo.**
 
-## Tooling reality check (important)
+## Tooling reality check
 
-- **BepInEx does not work on this game.** BepInEx 6.0.0-be.651 ships Cpp2IL that only reads metadata
-  24-29; the game aborts on boot. Don't retry it.
-- **MelonLoader 0.7.3 works.** Cpp2IL 2022.1.0-pre-release.21 + Il2CppInterop 1.5.1 generate the
-  interop assemblies.
-- Il2CppInterop prefixes game namespaces: `ChobiAssets.PTM` -> `Il2CppChobiAssets.PTM` when compiling.
-- **Unity stripped the IMGUI module** - `GUI`/`GUILayout` throw "Method unstripping failed". Any overlay
-  UI must be uGUI (the mod builds a Canvas with plain Text/Image and hit-tests `Input.mousePosition`).
-- Legacy `UnityEngine.Input` works (the game polls keys with it), even though the Input System package
-  is present.
+- **BepInEx does not work** on this game (its Cpp2IL reads metadata 24-29; the game aborts on boot).
+- **MelonLoader 0.7.3 works.** Il2CppInterop prefixes namespaces: `ChobiAssets.PTM` ->
+  `Il2CppChobiAssets.PTM`. Private fields *and* private methods are reachable through the interop
+  proxies (e.g. `wp.Initialize()`, `mgr.Switch_Camera_Mode(false)`) - verified by compiling.
+- **IMGUI is stripped** - any overlay UI must be uGUI with manual hit-testing (that is what the mod does).
+- Disabling the mod without uninstalling: rename `<game>\version.dll` (MelonLoader's proxy) and the
+  game runs vanilla; rename back to re-enable. That is how "is it the mod?" gets tested.
 
 ## What the mod does
 
-`TBC_Menu` - in-game menu, **F7**. Config at `<game>\UserData\TBC_Menu.json` (written only when you press
-Save). Tabs:
+`TBC_Menu` - in-game menu, **F7**, config at `<game>\UserData\TBC_Menu.json` (written only on Save).
 
 | Tab | Controls |
 |---|---|
-| Resolution | window size, fullscreen mode, internal render scale (0 = keep the stock 854x480 buffer) |
-| Visuals | film grain, chromatic aberration, vignette, fog density, AA (off/fxaa/smaa/taa), dithering, texture aniso, commander view |
-| Quality | MSAA 1-8x, shadowmap 1024-4096, soft shadow quality, shadow distance, render scale |
-| Effects | tonemapping (none/neutral/ACES), bloom + threshold, exposure, contrast, saturation |
-| Vehicle | per-tank top speed, traverse, elevation, accel/decel time, torque scale, realism table, live speed readout, dump vehicle values |
-| Tuning | tuning multiplier scales, AI preset + scales, unlock all tanks, points, manual respawn |
+| Resolution | window size, fullscreen mode, **Render direct to screen**, internal buffer scale (0 = stock, "breaks aim"), live buffer readout |
+| Visuals | film grain, chromatic aberration, vignette, fog density, AA, dithering, texture aniso, commander view |
+| Quality | MSAA, shadowmap, soft shadows, shadow distance, render scale |
+| Effects | tonemapping, bloom, exposure, contrast, saturation |
+| Vehicle | per-tank top speed / traverse / elevation / accel / torque, realism table, live speed readout, dump vehicle values |
+| Tuning | tuning scales, max levels, AI preset + scales, AI passive, unlock all tanks, points |
 
-Menu rows: click `<` / `>` either side of a value (the whole row also works - left half down, right half up).
+Hotkeys: **F7** menu, **F6** commander view (per-tank seats; `Alt`+arrows/`PgUp`/`PgDn`/wheel to
+move the eye, `Alt+S` saves), **F8** dumps render/UI geometry to the log.
 
-Other hotkeys: **F6** commander view (per-tank seats, `Alt` + arrows / `PgUp`/`PgDn` / wheel to move the
-eye, `Alt+S` to save). The seat is a request, not a one-shot: F6 works from the gun sight (it resets
-`Camera_Manager_CS.Camera_Mode` and `Switch_Camera_Mode`), the seat yields to the gun sight and
-resumes by itself, and a request made during a scene load waits for the tank instead of failing.
+## The five things that matter (measured, not guessed)
 
-## What was discovered (the useful part)
+1. **Top speed is `Drive_Wheel_Parent_CS.maxAngVelocity * wheel radius`.** That private field is
+   computed **once** in `Initialize()` from `Drive_Control_CS.Max_Speed`, so the wheel parents must
+   be re-initialised after a speed change. T-34/76 measured 51-52 km/h vs the stock 40.
+2. **Torque is not the speed or acceleration lever.** 2100 vs 3000 torque measured identical
+   acceleration; wheels are at their angular-velocity cap and the hull is traction-limited. It still
+   decides what a tank pulls on a slope, and `Torque` is recomputed every frame from `defaultTorque`.
+3. **Acceleration is the ramp**: `Acceleration_Flag` on, `Sync_Speed_Rate` off, cached private
+   `acceleRate` refreshed. With all three, 0->52 km/h went from ~7 s to ~22 s.
+4. **Aiming depends on two static fields.** `Aiming_Control_CS` casts with
+   `Camera.main.ScreenPointToRay` on a *screen* position, converted to buffer pixels with
+   `General_Settings_CS.Render_Texture_Width/Height` (**static, initialised 854x480, never read from
+   the real surface**). Resize the buffer or bypass it without updating those and the gun trails the
+   crosshair. Full table of what each change did in `README.md` / `docs/graphics-notes.md`.
+5. **A terrain's world size is `m_Heightmap.m_Scale.x/z`** - extent = `(resolution - 1) * scale`. Two
+   floats. Changing them stretches the heightmap: features widen and slopes divide. It is an 8-byte
+   patch (`1.0, 128.0, 1.0` appears exactly once per TerrainData) and it must be done on a scenario's
+   **own** terrain copy, never on a shipped `sharedassetsN.assets`.
 
-### Why the game looks the way it does
-1. The 3D view renders into a fixed **854x480 point-filtered RenderTexture** (`Render Texture (Main)`),
-   stretched to the window by a RawImage on `Canvas (Main RT)`.
-2. A global post volume ships **film grain 0.5, chromatic aberration 0.15, vignette 0.2** - nothing else.
-3. Exponential fog, density 0.0005 in menus, 0.0010 in missions.
-4. URP asset: **MSAA off, main light shadowmap 1024, shadow distance 128, soft shadows Low,
-   colour grading LDR, zero renderer features, additional-light shadows unsupported.**
-5. The art is full resolution (2048x2048 albedos); the crunch was never the textures.
+## Custom scenarios (installed and backed up)
 
-### Things that surprised us
-- The game has **no resolution setting at all**; nothing calls `Screen.SetResolution` at startup. **F11**
-  toggles fullscreen (`Full_Screen_Manager_CS`).
-- The **turret is slaved to `Camera.main`** (`Aiming_Control_CS` raycasts from it). Parenting a camera to the
-  turret makes the turret chase its own child and spin forever - that was a real bug in 1.2.0 of this mod.
-- **The Tuning tab's six scales do nothing at runtime.** `Special_Settings_CS` is
-  `[DefaultExecutionOrder(-1)]` and copies values into the vehicle in `Start()` and on respawn, so scaling the
-  `Tuning_Value` static tables afterwards is a no-op. Use the Vehicle tab instead.
-- **Torque is neither the speed nor the acceleration lever** (we believed otherwise in 1.5.0). Top speed is
-  `Drive_Wheel_Parent_CS.maxAngVelocity * wheel radius`, and that private field is computed **once** from
-  `Drive_Control_CS.Max_Speed` - so the wheel parents have to be re-initialised when the speed changes.
-  2100 vs 3000 torque measured identical acceleration; the speed ramp (`Acceleration_Time` plus
-  `Acceleration_Flag` on, `Sync_Speed_Rate` off and the cached `acceleRate` refreshed) is what decides
-  0-100% time. Full write-up in `docs\vehicle-model.md`.
-- The game quantises top speed into **two brackets, 35 or 40 km/h**, for every vehicle. The ~4900-5000
-  torque of the AI T-34/76 comes from the prefab, not from code (the player's Tiger I sits at 3000) - the
-  multipliers `Special_Settings_CS` applies are 1.0 at the default Tuning level.
-- Turret traverse is wildly fast where it should be slow: **T-34/76 35 deg/s** (hand traverse, real ~4-5),
-  Hetzer 40, Jagdpanther 15, Tiger I 10, Tiger II 15.
-- The game already ships a **Player Vehicle Tuning** screen (Firepower / Armor / Speed / Gun Traverse /
-  Reload Speed / Shell Velocity + Score Multiplier) plus an **Experimental** submenu - both clamps at x1.0.
+Two missions are on the game's **Custom Missions** page (06/06):
 
-### Vehicle dump
-`F7` -> Vehicle -> **Dump vehicle values** writes `<game>\UserData\TBC_Vehicles.json` with every spawned
-vehicle's live drive values (`Max_Speed`, `Torque`, `defaultTorque`, accel/decel, mass, the flags), every
-wheel parent's `Radius` and `maxAngVelocity`, turret and cannon `Speed_Mag`, and a `tankTypes` list of
-`Tank_Prop_SO` names with their spec numbers. Run it **inside a mission** (menu scenes have no
-`Drive_Control_CS`); `tankTypes` only lists the assets that scene has loaded.
+| Scenario | Battle | Terrain |
+|---|---|---|
+| `TBC proof - waypoints and timers` | `level68` | copy of City 03, emptied |
+| `TBC rolling ground` | `level70` | copy of Mountain 01, **stretched 2.5x to 2560 m**, blurred, amplitude x0.32 (= half the earlier height) |
 
-### Per-tank overrides (1.6.0)
-`vehicle.per_tank` holds absolute values per `Tank_Prop_SO.Tank_Name`: `max_speed` (m/s), `traverse`
-(deg/s), `elevation` (deg/s), `accel_time`/`decel_time` (s), `torque_scale`. Measured in the tutorial
-mission: a T-34/76 taken from the stock 40 km/h cap to `max_speed` 14.7 read **51-52 km/h** on the game's
-own speedometer, and `accel_time` 24 s stretched 0->52 km/h from ~7 s to ~22 s. **Load realism table** in
-the menu writes the six measured tanks; the rest are listed in `TODO.md` for when their keys are confirmed.
+`TBC rolling ground` content: player T-34/76, one hostile Pz. III N on a four-waypoint patrol, a
+timer message at 8 s, mission complete when that tank dies. Verified in game: the message fires, the
+AI drives its route (11.8 m/s), the mission completes. Vertical relief ~4.6 m, mean slope ~1.2 deg.
 
-## Where it stands
+Both are backed up by the editor in `...\backups\tank_battle_classic-2e580b51\scenarios\<scene_id>\`
+(`battle.level`, `terrain.npz`, `meta.json`, `mission.json`), so a game update cannot destroy them.
+Remove them with the editor's `Scenario > Remove scenario`, or restore from those backups.
 
-- Public, MIT, credited to murkzuk with the DeepSeek build note.
-- Installed build: `Mods\TBC_Menu.dll` v1.6.0.
-- **`TODO.md`**: the per-tank work is done and the four open questions are answered; what is left is adding
-  the remaining tanks' keys, measuring torque on slopes, and the small backlog (`cost_scale`,
-  `allow_manual_respawn`, the two unexposed AI knobs).
-- Verified end-to-end in game on 2026-11-05: menu renders, per-tank apply takes, speed cap moves, ramp
-  stretches, realism table writes, dump writes. Method: `K:\TvTDeepseek\scratch\tbcwin.ps1` (window
-  launch/screenshot/click/key helpers) + `MelonLoader\Latest.log` + the in-game speedometer.
+### Building one without the GUI (the reliable path)
 
-## Next: the mission editor
+The editor's window is DPI-stretched on this machine and its rows are ~20 px tall, so synthetic
+clicks land on the wrong row; the F5/F6 menu accelerators help but item selection needs a mouse.
+**Do it headlessly instead** - everything below works with the source clone:
 
-The user wants to move on to **https://github.com/fiermanb/TankBattleMissionEditor** (fierman, GPL-3.0,
-Python + UnityPy 1.25.4 + TypeTreeGeneratorAPI).
+```python
+import sys; sys.path.insert(0, r"K:\TvTDeepseek\scratch\tbcme")
+from scene_io import GameContext
+from scene_model import SceneModel, tank_catalogue
+from scenarios import ScenarioManager
+from scenario_backup import ScenarioBackups
+from briefing_sync import sync_mission
+from navmesh_edit import NavMesh
+from terrain_edit import TerrainPaint, read_heights, with_heights
+from terrain_features import box_blur
 
-Verified facts worth keeping:
+game = r"L:\SteamLibrary\steamapps\common\Tank Battle Classic"
+backup = r"K:\TvTDeepseek\tbc_mod\missioneditor\app\TankBattleMissionEditor\backups\tank_battle_classic-2e580b51"
+ctx = GameContext(game); mgr = ScenarioManager(ctx, backup)
 
-- Release v1.26.0 was generated against **exactly this game build** - its recorded
-  `metadata_sha256` equals ours, so all 1075 script layouts apply with no mismatch.
-- It edits the game's own `level*` / `sharedassets*` files: tanks, waypoints, routes, scenery, fog, day/dusk/
-  night lighting, events with timers and trigger areas, terrain brushes, navmesh rebuild, `.tbscenario`
-  import/export, per-save backups.
-- Its trick for stripped type trees: generate MonoBehaviour field layouts from `GameAssembly.dll` +
-  `global-metadata.dat` with TypeTreeGeneratorAPI, freeze them into `layouts\tbc_layouts.json.gz`, and validate
-  per script against `SerializedType old_type_hash`. Writing keeps original object bytes verbatim, appends
-  changed objects 16-byte aligned, and regenerates only the metadata block.
-- Two ships with it: Kursk - Deep Defense and Kursk - Breakthrough.
-- Limitations it states: existing objects and tank types only, maps use the game's terrains and cannot be
-  resized, terrain/AI-route rebuild only for custom scenarios, event messages capped ~45 chars, briefing
-  lists at most 9 unit groups.
+scene_name, battle_idx = mgr.create(124, "Title", "Briefing")   # 124 = Hunter or Hunted (Mountain)
+m = SceneModel(ctx, battle_idx)
+tp = TerrainPaint(m); m.begin("copy"); tp.ensure_copy(); m.commit(); m.save(); tp.assets.save()
+#   patch m_Scale x/z in the scenario's own sharedassetsN.assets, and/or write heights:
+#   sf.write(tpid, with_heights(td, raw))  with  raw = blurred/amplitude-scaled heights
 
-Natural overlap with this mod: the editor cannot change per-vehicle combat values, so a per-tank realism
-table here (TODO item) and a custom scenario there are complementary.
+m.begin("content")
+m.set_field(transform_pid, "m_LocalPosition", {"x": x, "y": ground(x, z), "z": z})
+m.set_field(spawn_event_pid, "m_IsActive", True)
+w1 = m.new_route(p1); pack_go = m.parent_go(w1); pack_tr = m.tr_of_go[pack_go]
+for p in (p2, p3): m.new_waypoint(pack_tr, prev, p)
+m.set_field(spawn_event_pid, "WayPoint_Pack", {"m_FileID": 0, "m_PathID": pack_go})
+m.commit(); m.save()
 
-## Custom scenarios (2026-11-05, unsupervised session)
+sync_mission(GameContext(game), mgr, SceneModel(GameContext(game), battle_idx), backup)
+m3 = SceneModel(GameContext(game), battle_idx); nav = NavMesh(m3); tiles, _ = nav.build()
+m3.begin("rebuild"); nav.write(tiles); m3.commit(); m3.save()
+ScenarioBackups(ctx, mgr).backup(entry)      # protect it
+```
 
-Two custom missions are installed in the game under the editor's **Custom Missions** page:
-`TBC proof - waypoints and timers` (city terrain) and `TBC rolling ground` (a 2.5x stretched
-Mountain terrain, the one that plays as rolling hills). Both are backed up in the editor's
-`backups\<slug>\scenarios\` and can be removed with `Scenario > Remove scenario`.
+**Wiring gotchas that cost a crash:** `Trigger_Tanks` holds **Transform** pids (a component pid makes
+the rule pass vacuously and the event fires at mission start; a GameObject pid makes the game exit
+while loading the scene). `WayPoint_Pack` points at the pack's **GameObject**, `Respawn_Point_Pack`
+at its **Transform**. Deactivation (`m_IsActive = False`) clears play but keeps the object in the
+file, and the briefing screen must be regenerated (`sync_mission`) after spawn changes.
 
-The whole workflow is scriptable with the editor's own Python modules - no GUI needed:
-`ScenarioManager.create`, `TerrainPaint.ensure_copy`, `SceneModel.set_field` /
-`new_route` / `new_waypoint`, `briefing_sync.sync_mission`, `navmesh_edit.NavMesh`,
-`ScenarioBackups.backup`. Working notes and the evidence are in
-`docs/terrain-and-scenarios.md` (repo) and `scratch\rolling-hills-scenario.md` (workspace).
+**Terrain shaping, in numbers:** remeasure after any change - `ScenarioManager` work is cheap but
+iterating on slopes needs the statistics (`np.gradient` over the stretched cell size, mean/p95/max
+slope). Measured band for "reads as rolling hills" in this game's camera: **~2.5 deg mean slope with
+~9 m relief over 2.5 km**. At 1.9 deg / 7 m it reads as a plain. Stretching alone keeps the cliff
+structure (a 2.5x stretch left a 55 deg maximum), so blur (`box_blur` x2, r=8) and amplitude matter.
 
-Key facts: a terrain's world size is `m_Heightmap.m_Scale` x/z (an 8-byte patch to stretch);
-stretching alone keeps cliff structure, so heights also need a blur and an amplitude scale;
-~2.5 deg mean slope with ~9 m of relief over 2.5 km is the band that still reads as hills;
-`Trigger_Tanks` holds Transform pids; AI pathing needs the route map rebuilt after any terrain or
-object change.
+## Automation harness
 
-Still open there: the mission-complete event is wired to the single enemy but has not been played
-through by actually killing it; 7 unused hostile spawns remain deactivated in the scene.
+`K:\TvTDeepseek\scratch\`:
+
+- `tbcwin.ps1` - game window: `Save-TbcShot`, `Save-TbcCrop`, `Invoke-TbcClick`, `Invoke-TbcKey`,
+  `Invoke-TbcHold`, `Invoke-TbcMouse` (1 = left, 2 = right)
+- `scr.ps1` - DPI-aware full-screen capture and clicks for non-game windows (`SetProcessDpiAwarenessContext`)
+- `mewin.ps1` - the editor window (same idea; see the DPI warning above)
+- `offsets.json` + `dis.py` / `range.py` / `callers2.py` - Capstone disassembly of
+  `GameAssembly.dll` by `Type::Method` name, with call targets resolved
+- `terrain_stats2.py`, `all_terrains.py`, `quadrants.py`, `spectrum.py` - the terrain survey
+- `gen_candidates2.py` - procedural heightmap experiments (rejected: noise looked blotchy)
+- `half_height.py`, `soften*.py`, `stretch_test.py` - terrain shaping, verified to round-trip
+- notes: `rolling-hills-scenario.md`, `mission-editor-proof.md`, `terrain-relief-analysis.md`
+
+Pattern for verifying anything in game: screenshot/measure, never assume. The mod's own instruments -
+**F8** geometry dump, **Dump vehicle values** (`UserData\TBC_Vehicles.json`, includes positions and
+drive flags) and `MelonLoader\Latest.log` - are usually faster than eyeballing a screenshot.
+
+## Where it stands right now
+
+- Repo clean, pushed, MIT, credited to murkzuk with the DeepSeek build note. `dist\TBC_Menu-1.7.0.zip`.
+- Installed: `<game>\Mods\TBC_Menu.dll` 1.7.0, hash-identical to the build. `version.dll` is back
+  in place (MelonLoader active).
+- User config: `Render direct to screen` on, `internal_scale` 0, MSAA 8, render scale 2, shadow
+  distance 400, seven per-tank vehicle entries, `player_only: true`.
+- Game and mission editor were both closed at handover; nothing is left running.
+- `save.json` is untouched (a pre-test backup was taken and removed; nothing wrote to it).
+
+## Open items, in the order they matter
+
+1. **Verify the bypass in the less-travelled camera states** - gun sight and map camera with
+   `bypass_buffer` on. Third person, driving, HUD, messages and the gun sight were checked; the map
+   camera was not. If something is off, the toggle is live in the Resolution tab.
+2. **Mission complete has never been played through** - the trigger is wired to the enemy's Transform
+   (correct form, copied from the stock mission) but the tank was never actually killed.
+3. **Terrain: iterate on the half-height version** - it is at ~1.2 deg mean slope now; if it reads too
+   flat, the way to keep the height while restoring hill character is shorter wavelengths (ridged
+   noise), not more amplitude.
+4. **Torque on slopes** is still unmeasured (`torque_scale` only shows on gradients).
+5. **Backlog**: `cost_scale` and `allow_manual_respawn` (lost in an earlier consolidation), the two
+   AI knobs that exist in config but have no menu row, AI deceleration (dumps show 0.01 s, i.e. AI
+   tanks stop instantly).
 
 ## Housekeeping
 
-- Back up `save.json` before using **Unlock all tanks** or **Points** - they write into live player data
-  which the game saves on exit.
-- To go back to vanilla: delete `version.dll`, `MelonLoader\`, `Mods\`, `UserData\` from the game folder. Steam
-  "verify integrity" also removes the loader but keeps the editor's custom scenarios.
+- Back up `save.json` before using **Unlock all tanks** or **Points** - they write into live player
+  data, which the game saves on exit.
+- To go vanilla: delete `version.dll`, `MelonLoader\`, `Mods\`, `UserData\` from the game folder
+  (Steam "verify integrity" also removes the loader). That does **not** remove the custom scenarios -
+  they live in `Tank Battle Classic_Data` and are removed with `Scenario > Remove scenario`.
 - Build: `tools/find-game.ps1` then `build.ps1` (produces `dist\TBC_Menu-<version>.zip`).
+- A game update replaces `level*`/`sharedassets*`: the mod needs rebuilding against the new
+  assemblies, and custom scenarios need `Scenario > Restore scenarios from backup` (the editor
+  converts them).
