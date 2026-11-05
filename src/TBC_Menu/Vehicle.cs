@@ -77,6 +77,10 @@ namespace TbcMenu
                     float mass = -1f;
                     try { var rb = drive.GetComponentInParent<Rigidbody>(); if (rb != null) mass = rb.mass; } catch { }
 
+                    // world position, so movement can be measured from the dump alone
+                    Vector3 pos = Vector3.zero;
+                    try { pos = drive.transform.position; } catch { }
+
                     driveRows.Add("  { tank: \"" + name + "\", kind: \"drive\", maxSpeed_mps: " + drive.Max_Speed.ToString("F3") +
                                   ", torque: " + drive.Torque.ToString("F1") +
                                   ", defaultTorque: " + drive.defaultTorque.ToString("F1") +
@@ -85,6 +89,7 @@ namespace TbcMenu
                                   ", decel_s: " + drive.Deceleration_Time.ToString("F2") +
                                   ", speedRate: " + drive.Speed_Rate.ToString("F3") +
                                   ", velocity_mps: " + drive.Current_Velocity.ToString("F3") +
+                                  ", posX: " + pos.x.ToString("F2") + ", posZ: " + pos.z.ToString("F2") +
                                   ", accelFlag: " + (drive.Acceleration_Flag ? "on" : "off") +
                                   ", syncSpeedRate: " + (drive.Sync_Speed_Rate ? "on" : "off") +
                                   ", torqueLimitter: " + (drive.Torque_Limitter ? "on" : "off") +
