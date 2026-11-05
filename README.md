@@ -59,6 +59,7 @@ clicking cannot fire.
 | **Visuals** | film grain, chromatic aberration, vignette, fog density, antialiasing (off/fxaa/smaa/taa), dithering, texture aniso, **commander view** |
 | **Quality** | MSAA 1-8x, main light shadowmap 1024-4096, soft shadow quality, shadow distance, render scale (supersampling above 1) |
 | **Effects** | tonemapping (none/neutral/ACES), bloom + threshold, exposure, contrast, saturation |
+| **Vehicle** | per-tank top speed, turret traverse, gun elevation, acceleration and torque, plus a realism table and a live speed readout |
 | **Tuning** | tuning multiplier scales, max tuning levels, AI preset and scales, AI passive, unlock all tanks, points |
 
 ## Commander view (F6)
@@ -84,10 +85,54 @@ is placed on the turret and the camera's world pose is driven directly every fra
 Notes: switching to the gun sight or changing scene drops you back to third person; `F6` toggles at
 any time. The tank's own body is what you are sitting on, so you see the deck and barrel in frame.
 
+## Vehicle overrides
+
+The game quantises every vehicle into two speed brackets (35 or 40 km/h) and models turret
+traverse several times too fast, so a Tiger I and a T-34/76 end up 5 km/h apart and both turrets
+snap around like a tank in an arcade game. This tab replaces those numbers per tank, in real units:
+
+    "vehicle": {
+      "enabled": true,
+      "player_only": false,
+      "per_tank": {
+        "T-34/76": { "max_speed": 14.7, "traverse": 5.0, "accel_time": 24.0 },
+        "Tiger I": { "max_speed": 12.7, "traverse": 8.0, "accel_time": 26.0 }
+      }
+    }
+
+| Key | Unit | Meaning |
+|---|---|---|
+| `max_speed` | m/s | top speed (14.7 = 53 km/h) |
+| `traverse` | deg/s | turret traverse |
+| `elevation` | deg/s | gun elevation |
+| `accel_time` | s | standstill to full speed |
+| `decel_time` | s | full speed to standstill |
+| `torque_scale` | x | multiplies the game's wheel torque (slopes only, see below) |
+
+Entries are keyed by `Tank_Prop_SO.Tank_Name` ("T-34/76", "Tiger I"); the **Tank** row in the menu
+cycles through the tanks in the current mission and edits the selected one. **Load realism table**
+fills in the six tanks that were measured; **Dump vehicle values** writes every live value,
+including the flags, to `UserData\TBC_Vehicles.json`.
+
+Two things worth knowing before you tune:
+
+- **Torque is not the speed or acceleration lever.** Measured in game, 2100 and 3000 torque
+  produced byte-identical acceleration: the wheels are already at their angular-velocity cap and
+  the hull is traction-limited. Top speed is `maxAngVelocity * wheel radius`, and that cap is a
+  private field the wheel parent computes once from `Max_Speed` - which is why the mod re-runs it.
+- **The ramp is the lever.** `Acceleration_Time` only takes effect when `Acceleration_Flag` is on,
+  `Sync_Speed_Rate` is off, and the cached `acceleRate` is refreshed; the mod sets all three when
+  `accel_time` is given. That is what stops every tank accelerating like a go-kart.
+  Note it disables the game's speed synchronisation for that tank, which has not been tested on
+  hills.
+
+The full reverse-engineering write-up, with field offsets and the measured curves, is in
+[docs/vehicle-model.md](docs/vehicle-model.md).
+
 ## Defaults
 
 Resolution and the visual cleanup are on; quality is raised (MSAA 4x, 2048 shadowmap, high soft
-shadows, 200 m shadow distance); effects and tuning are **off**.
+shadows, 200 m shadow distance); effects, tuning and vehicle overrides are **off**.
 
 ## Compatibility
 
@@ -126,7 +171,8 @@ environment variable, create a `Local.props` with `<GameDir>...</GameDir>`, or p
 `build.ps1` produces `dist\TBC_Menu-<version>.zip` containing the DLL, README and licence.
 
 Source layout: `MenuMod.cs` (lifecycle and state), `Config.cs` (JSON shape and IO),
-`Apply.cs` (everything that mutates the game), `MenuUi.cs` (the uGUI menu).
+`Apply.cs` (visuals, quality, effects, tuning), `Vehicle.cs` (per-tank vehicle overrides),
+`Camera.cs` (commander view), `MenuUi.cs` (the uGUI menu).
 
 ## Credits
 

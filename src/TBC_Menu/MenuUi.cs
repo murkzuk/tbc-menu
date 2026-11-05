@@ -129,7 +129,7 @@ namespace TbcMenu
             else if (_tab == 1) total += RowH * 20f;
             else if (_tab == 2) total += RowH * 6f;
             else if (_tab == 3) total += RowH * 7f;
-            else if (_tab == 4) total += RowH * 9f;
+            else if (_tab == 4) total += RowH * 19f;
             else total += RowH * 16f;
             total += RowH * 4f;
             MakeImage(PanelX, PanelY, PanelW, total, new Color(0.02f, 0.02f, 0.05f, 0.95f));
@@ -331,15 +331,85 @@ namespace TbcMenu
         private void BuildVehicleRows(ref float y)
         {
             var v = _cfg.vehicle;
-            AddToggleRow(ref y, "Enable vehicle overrides", () => v.enabled, b => { v.enabled = b; _vehSnaps.Clear(); ApplyVehicleOverrides(); });
-            AddFloatRow(ref y, "Speed scale", () => v.speed_scale, x => { v.speed_scale = x; ApplyVehicleOverrides(); }, 0.05f, 3f, 0.05f, "F2");
-            AddFloatRow(ref y, "Torque scale", () => v.torque_scale, x => { v.torque_scale = x; ApplyVehicleOverrides(); }, 0.05f, 3f, 0.05f, "F2");
-            AddFloatRow(ref y, "Traverse scale", () => v.traverse_scale, x => { v.traverse_scale = x; ApplyVehicleOverrides(); }, 0.05f, 3f, 0.05f, "F2");
-            AddToggleRow(ref y, "Player tank only", () => v.player_only, b => { v.player_only = b; _vehSnaps.Clear(); ApplyVehicleOverrides(); });
+            AddToggleRow(ref y, "Enable vehicle overrides", () => v.enabled, b =>
+            {
+                v.enabled = b;
+                if (b) ApplyVehicleOverrides();
+                else RestoreVehicleOriginals();
+            });
+            AddFloatRow(ref y, "Speed scale (all tanks)", () => v.speed_scale, x => { v.speed_scale = x; ApplyVehicleOverrides(); }, 0.05f, 3f, 0.05f, "F2");
+            AddFloatRow(ref y, "Torque scale (all tanks)", () => v.torque_scale, x => { v.torque_scale = x; ApplyVehicleOverrides(); }, 0.05f, 3f, 0.05f, "F2");
+            AddFloatRow(ref y, "Traverse scale (all tanks)", () => v.traverse_scale, x => { v.traverse_scale = x; ApplyVehicleOverrides(); }, 0.05f, 3f, 0.05f, "F2");
+            AddToggleRow(ref y, "Player tank only", () => v.player_only, b => { v.player_only = b; ApplyVehicleOverrides(); });
+
+            RefreshEditTankList();
+            string tank = EditTankName;
+
+            AddRow(ref y, "--- per tank (absolute) ---", () => (_vehEditIndex + 1) + "/" + _vehEditNames.Count, null, new Color(0.6f, 0.65f, 0.75f), false);
+            AddRow(ref y, "Tank", () => tank, d => CycleEditTank(d));
+
+            AddRow(ref y, "  max speed m/s", () => OptLabel(EditEntry(false)?.max_speed, "F2"), d =>
+            {
+                var e = EditEntry(true);
+                if (e == null) return;
+                float cur = e.max_speed ?? GameMaxSpeedOf(EditTankName) ?? 10f;
+                e.max_speed = Mathf.Clamp(cur + d * 0.5f, 0.5f, 30f);
+                ApplyVehicleOverrides();
+            });
+            AddRow(ref y, "  traverse deg/s", () => OptLabel(EditEntry(false)?.traverse, "F1"), d =>
+            {
+                var e = EditEntry(true);
+                if (e == null) return;
+                float cur = e.traverse ?? GameTraverseOf(EditTankName) ?? 30f;
+                e.traverse = Mathf.Clamp(cur + d * 1f, 0.5f, 120f);
+                ApplyVehicleOverrides();
+            });
+            AddRow(ref y, "  elevation deg/s", () => OptLabel(EditEntry(false)?.elevation, "F1"), d =>
+            {
+                var e = EditEntry(true);
+                if (e == null) return;
+                float cur = e.elevation ?? 20f;
+                e.elevation = Mathf.Clamp(cur + d * 1f, 0.5f, 90f);
+                ApplyVehicleOverrides();
+            });
+            AddRow(ref y, "  torque scale", () => OptLabel(EditEntry(false)?.torque_scale, "F2"), d =>
+            {
+                var e = EditEntry(true);
+                if (e == null) return;
+                float cur = e.torque_scale ?? 1f;
+                e.torque_scale = Mathf.Clamp(cur + d * 0.05f, 0.05f, 3f);
+                ApplyVehicleOverrides();
+            });
+            AddRow(ref y, "  accel time s", () => OptLabel(EditEntry(false)?.accel_time, "F1"), d =>
+            {
+                var e = EditEntry(true);
+                if (e == null) return;
+                float cur = e.accel_time ?? (GameAccelTimeOf(EditTankName) ?? 10f);
+                e.accel_time = Mathf.Clamp(cur + d * 2f, 1f, 120f);
+                ApplyVehicleOverrides();
+            });
+            AddRow(ref y, "  decel time s", () => OptLabel(EditEntry(false)?.decel_time, "F1"), d =>
+            {
+                var e = EditEntry(true);
+                if (e == null) return;
+                float cur = e.decel_time ?? (GameDecelTimeOf(EditTankName) ?? 2f);
+                e.decel_time = Mathf.Clamp(cur + d * 0.5f, 0.1f, 60f);
+                ApplyVehicleOverrides();
+            });
+            AddRow(ref y, "  clear this tank", () => "click", d =>
+            {
+                var cfg = _cfg.vehicle;
+                if (cfg.per_tank != null && cfg.per_tank.Remove(EditTankName)) ApplyVehicleOverrides();
+            }, null, false);
+            AddRow(ref y, "Load realism table", () => "write " + RealismTable.Length + " tanks", d => LoadRealismTable(), null, false);
             AddRow(ref y, "Dump vehicle values", () => "write json", d => DumpVehicles(), null, false);
-            AddRow(ref y, "applies to", () => v.player_only ? "player only" : "every tank", null, new Color(0.6f, 0.65f, 0.75f));
-            AddRow(ref y, "note", () => "these are the real drive values", null, new Color(0.6f, 0.65f, 0.75f));
+
+            AddRow(ref y, "live", () => PlayerSpeedLabel(), null, new Color(0.6f, 0.9f, 0.7f), false);
+            AddRow(ref y, "applies to", () => v.player_only ? "player only, every 2s" : "every tank, every 2s", null, new Color(0.6f, 0.65f, 0.75f), false);
         }
+
+        private static string OptLabel(float? value, string fmt)
+            => value.HasValue ? value.Value.ToString(fmt) : "game";
 
         private void BuildTuningRows(ref float y)
         {

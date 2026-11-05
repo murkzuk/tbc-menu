@@ -51,13 +51,30 @@ namespace TbcMenu
         public int points = 0;
     }
 
+    // Per-tank vehicle values. Anything left null ("max_speed": null) falls back to the
+    // global scale below, so a partial entry only overrides the axes it names.
+    public class TankVehicleCfg
+    {
+        public float? max_speed;      // metres per second, absolute (0 / null = game value)
+        public float? traverse;       // turret traverse, degrees per second, absolute
+        public float? elevation;      // gun elevation, degrees per second, absolute
+        public float? torque_scale;   // multiplies the game's Drive_Control_CS.Torque
+        public float? accel_time;     // seconds from standstill to full speed (the real ramp)
+        public float? decel_time;     // seconds from full speed to standstill
+    }
+
     public class VehicleCfg
     {
         public bool enabled = false;
         public float speed_scale = 1f;     // multiplies Drive_Control_CS.Max_Speed
         public float torque_scale = 1f;    // multiplies Drive_Control_CS.Torque
-        public float traverse_scale = 1f;  // multiplies turret traverse rates
+        public float traverse_scale = 1f;  // multiplies Turret_Horizontal_CS.Speed_Mag
         public bool player_only = true;    // leave AI tanks alone
+
+        // keyed by Tank_Prop_SO.Tank_Name ("T-34/76", "Tiger I"), the same key the commander
+        // seats use. A per-tank entry takes over the axes it lists; null axes use the scales above.
+        public System.Collections.Generic.Dictionary<string, TankVehicleCfg> per_tank =
+            new System.Collections.Generic.Dictionary<string, TankVehicleCfg>();
     }
 
     public class QualityCfg

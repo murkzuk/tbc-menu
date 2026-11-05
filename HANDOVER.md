@@ -1,6 +1,6 @@
 # Handover
 
-Everything needed to pick this up cold. Last commit: **3250f31**, mod version **1.5.0**.
+Everything needed to pick this up cold. Mod version **1.6.0** (per-tank vehicle overrides).
 
 ## The two repos
 
@@ -51,7 +51,7 @@ Save). Tabs:
 | Visuals | film grain, chromatic aberration, vignette, fog density, AA (off/fxaa/smaa/taa), dithering, texture aniso, commander view |
 | Quality | MSAA 1-8x, shadowmap 1024-4096, soft shadow quality, shadow distance, render scale |
 | Effects | tonemapping (none/neutral/ACES), bloom + threshold, exposure, contrast, saturation |
-| Vehicle | speed / torque / traverse scales, player-only switch, dump vehicle values |
+| Vehicle | per-tank top speed, traverse, elevation, accel/decel time, torque scale, realism table, live speed readout, dump vehicle values |
 | Tuning | tuning multiplier scales, AI preset + scales, unlock all tanks, points, manual respawn |
 
 Menu rows: click `<` / `>` either side of a value (the whole row also works - left half down, right half up).
@@ -78,10 +78,15 @@ eye, `Alt+S` to save).
 - **The Tuning tab's six scales do nothing at runtime.** `Special_Settings_CS` is
   `[DefaultExecutionOrder(-1)]` and copies values into the vehicle in `Start()` and on respawn, so scaling the
   `Tuning_Value` static tables afterwards is a no-op. Use the Vehicle tab instead.
-- **`Drive_Control_CS.Torque` is the real speed lever.** `Max_Speed` is mainly a normalisation reference
-  (`Current_Velocity / Max_Speed` for anti-slip and downforce).
-- The game quantises top speed into **two brackets, 35 or 40 km/h**, for every vehicle, and every AI tank
-  sits at **~4900-5000 torque** regardless of mass.
+- **Torque is neither the speed nor the acceleration lever** (we believed otherwise in 1.5.0). Top speed is
+  `Drive_Wheel_Parent_CS.maxAngVelocity * wheel radius`, and that private field is computed **once** from
+  `Drive_Control_CS.Max_Speed` - so the wheel parents have to be re-initialised when the speed changes.
+  2100 vs 3000 torque measured identical acceleration; the speed ramp (`Acceleration_Time` plus
+  `Acceleration_Flag` on, `Sync_Speed_Rate` off and the cached `acceleRate` refreshed) is what decides
+  0-100% time. Full write-up in `docs\vehicle-model.md`.
+- The game quantises top speed into **two brackets, 35 or 40 km/h**, for every vehicle. The ~4900-5000
+  torque of the AI T-34/76 comes from the prefab, not from code (the player's Tiger I sits at 3000) - the
+  multipliers `Special_Settings_CS` applies are 1.0 at the default Tuning level.
 - Turret traverse is wildly fast where it should be slow: **T-34/76 35 deg/s** (hand traverse, real ~4-5),
   Hetzer 40, Jagdpanther 15, Tiger I 10, Tiger II 15.
 - The game already ships a **Player Vehicle Tuning** screen (Firepower / Armor / Speed / Gun Traverse /
@@ -89,18 +94,28 @@ eye, `Alt+S` to save).
 
 ### Vehicle dump
 `F7` -> Vehicle -> **Dump vehicle values** writes `<game>\UserData\TBC_Vehicles.json` with every spawned
-vehicle's real `Max_Speed`, `Torque`, turret `Speed_Mag`, aiming rates and the game's own spec numbers.
-Must be run **inside a mission** (menu scenes have no Drive_Control_CS).
+vehicle's live drive values (`Max_Speed`, `Torque`, `defaultTorque`, accel/decel, mass, the flags), every
+wheel parent's `Radius` and `maxAngVelocity`, turret and cannon `Speed_Mag`, and a `tankTypes` list of
+`Tank_Prop_SO` names with their spec numbers. Run it **inside a mission** (menu scenes have no
+`Drive_Control_CS`); `tankTypes` only lists the assets that scene has loaded.
+
+### Per-tank overrides (1.6.0)
+`vehicle.per_tank` holds absolute values per `Tank_Prop_SO.Tank_Name`: `max_speed` (m/s), `traverse`
+(deg/s), `elevation` (deg/s), `accel_time`/`decel_time` (s), `torque_scale`. Measured in the tutorial
+mission: a T-34/76 taken from the stock 40 km/h cap to `max_speed` 14.7 read **51-52 km/h** on the game's
+own speedometer, and `accel_time` 24 s stretched 0->52 km/h from ~7 s to ~22 s. **Load realism table** in
+the menu writes the six measured tanks; the rest are listed in `TODO.md` for when their keys are confirmed.
 
 ## Where it stands
 
-- Repo clean, pushed, public, MIT, credited to murkzuk with the DeepSeek build note.
-- Installed build: `Mods\TBC_Menu.dll` v1.5.0.
-- **`TODO.md` holds the next real piece of work**: per-tank vehicle overrides with historical values, plus the
-  measured game-vs-real-life tables, open questions, and a backlog (`cost_scale` and
-  `allow_manual_respawn` were lost in the consolidation and need restoring).
-- The user's live config still has `vehicle.speed_scale = 0.25`, which caps their tank near 9 km/h - set
-  Speed scale back to 1.00.
+- Public, MIT, credited to murkzuk with the DeepSeek build note.
+- Installed build: `Mods\TBC_Menu.dll` v1.6.0.
+- **`TODO.md`**: the per-tank work is done and the four open questions are answered; what is left is adding
+  the remaining tanks' keys, measuring torque on slopes, and the small backlog (`cost_scale`,
+  `allow_manual_respawn`, the two unexposed AI knobs).
+- Verified end-to-end in game on 2026-11-05: menu renders, per-tank apply takes, speed cap moves, ramp
+  stretches, realism table writes, dump writes. Method: `K:\TvTDeepseek\scratch\tbcwin.ps1` (window
+  launch/screenshot/click/key helpers) + `MelonLoader\Latest.log` + the in-game speedometer.
 
 ## Next: the mission editor
 
