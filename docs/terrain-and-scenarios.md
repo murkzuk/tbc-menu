@@ -61,3 +61,20 @@ kept an AI tank moving at ~11.8 m/s, and an 8 s timer message fired on schedule.
 
 A game update replaces `level*`/`sharedassets*` and deletes custom scenarios; both the editor and
 this workflow keep originals in a backups folder so they can be restored.
+## Two wiring gotchas found the hard way
+
+`Trigger_Tanks` on a mission event holds **Transform** pids - not GameObject pids, and not the
+spawn event's component pid. Both mistakes look like something else:
+
+| wrong reference | symptom |
+|---|---|
+| the spawn event's component pid | the runtime finds no live tank, the rule passes vacuously and the event fires **at mission start** |
+| the spawn's GameObject pid | the game **exits while loading the scene** - no exception, no crash dump |
+| the spawn's Transform (correct) | works; a stock mission shows the form: `Trigger_Tanks = [6213, 6238, ...]`, all Transforms |
+
+`WayPoint_Pack` is the other way round: it points at the pack's **GameObject**, while
+`Respawn_Point_Pack` points at its **Transform**.
+
+Also: deactivating (`m_IsActive = False`) removes an object from play but keeps it in the file, so
+"cleared" scenes still list their old spawns in tables and backups; the briefing screen is separate
+and has to be regenerated from the battle scene after any spawn change.
