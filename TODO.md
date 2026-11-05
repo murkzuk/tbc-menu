@@ -89,25 +89,18 @@ The scenario editor's Kursk pack declares the game's full playable roster (`meta
 spawns that vehicle (`F7 -> Vehicle -> Dump vehicle values`, then read `tankTypes` and the per-drive
 `tank` field). A wrong key is harmless - it simply never matches.
 
-## Open: does an AI actually patrol a waypoint pack?
+## Answered: an AI does patrol a waypoint pack
 
-Setting a spawn's **Waypoint pack** in the editor does link it (the Waypoints table's `Used by`
-column reads the tank), and in game the AI drove ~35 m from its spawn towards the route - then
-stalled about 4 m short of a waypoint at ~4 cm/s, wheels turning at 5.7 rad/s against a hull speed
-of 0.04 m/s.
+The earlier stall (35 m of travel then ~4 cm/s wheelspin) was the **stale AI route map**, not the
+route. Rebuilding it for the edited terrain fixed it: on a 2.5x stretched Mountain terrain a
+four-waypoint patrol kept a Pz. III N moving at ~11.8 m/s, measured from the vehicle dump
+(`speedRate 1.000`, `velocity_mps 11.838`, then 4.98 m/s at the next waypoint). Timed events work
+too - an 8 s timer message appeared on schedule and cleared after its display time.
 
-Next step is a controlled retest on the proof scenario (`level68`, "Custom Missions" page):
-
-1. `Scenario -> Rebuild AI route map`, then Ctrl+S.
-2. Move the route onto open ground well away from the player's spawn (the four waypoints currently
-   sit ~6 m from the BT-7).
-3. Launch, start the mission, and dump twice a minute apart - the figures to compare are the
-   `kind: "drive"` rows' `posX`/`posZ`, `speedRate` and `velocity_mps`.
-
-If the AI walks the waypoints after step 1, the earlier stall was the AI route map (the editor warns
-that after an empty-terrain strip the navmap only approximates the game's). If it still creeps, the
-route itself or the terrain under it is the problem, and the next test is the same route on a
-*copied mission* instead of an empty terrain.
+Custom scenarios can be built entirely headlessly with the editor's own Python modules
+(`ScenarioManager.create`, `TerrainPaint.ensure_copy`, `SceneModel.set_field`/`new_route`,
+`briefing_sync.sync_mission`, `navmesh_edit.NavMesh`) - no GUI needed. See
+[docs/terrain-and-scenarios.md](docs/terrain-and-scenarios.md) for the measurements and the recipe.
 
 ## Backlog
 
