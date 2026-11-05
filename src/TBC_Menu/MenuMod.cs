@@ -13,7 +13,7 @@ using UnityEngine.UI;
 using Il2CppChobiAssets.PTM;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 
-[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.6.0", "murkzuk")]
+[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.6.1", "murkzuk")]
 [assembly: MelonAdditionalCredits("Built by DeepSeek at murkzuk's request")]
 [assembly: MelonGame(null, null)]
 
@@ -59,8 +59,8 @@ namespace TbcMenu
 
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
-            ExitCommanderView();      // scene objects are gone; re-enter with F6
-            ResetVehicleSnaps();      // new tanks, new first-seen values
+            OnSceneChangedCommander(); // scene objects are gone; the request survives if it was open
+            ResetVehicleSnaps();       // new tanks, new first-seen values
             if (!_cfg.enabled) return;
             ApplyAll("scene " + sceneName);
             _nextTick = 0f;

@@ -267,10 +267,11 @@ namespace TbcMenu
             AddIntRow(ref y, "Texture aniso", () => v.texture_aniso, x => { v.texture_aniso = x; _assetsDone.Clear(); ApplyAssets("menu"); }, 0, 16, 2);
 
             var c = _cfg.camera;
-            AddRow(ref y, "Commander view (F6)", () => _commanderActive ? "ON" : "OFF", d =>
+            AddRow(ref y, "Commander view (F6)", () =>
+                CommanderWanted ? (_commanderActive ? "ON" : "waiting") : "OFF", d =>
             {
                 ToggleCommanderView();
-                c.commander_view = _commanderActive;
+                c.commander_view = CommanderWanted;
             });
             AddRow(ref y, "Editing", () => SeatLabel, null, new Color(0.6f, 0.65f, 0.75f));
             AddFloatRow(ref y, "Commander height (Y)", () => SeatHeight, x => SeatHeight = x, 0.1f, 5f, 0.05f, "F2");
@@ -287,8 +288,8 @@ namespace TbcMenu
         private void ReapplyCommander()
         {
             if (!_commanderActive) return;
-            ExitCommanderView();
-            EnterCommanderView();
+            ExitCommanderView();      // releases the camera and clears the request
+            ToggleCommanderView();    // ... so ask for it again with the new settings
         }
 
         private void BuildQualityRows(ref float y)

@@ -82,8 +82,19 @@ is placed on the turret and the camera's world pose is driven directly every fra
 | `commander_free_look` | `false` = the view rides the turret and the mouse trains the gun as usual. `true` = the mouse looks around while the gun stays put (`Aiming_Control_CS` is suspended; firing still works) |
 | `commander_sensitivity` | free-look sensitivity |
 
-Notes: switching to the gun sight or changing scene drops you back to third person; `F6` toggles at
-any time. The tank's own body is what you are sitting on, so you see the deck and barrel in frame.
+Notes: the tank's own body is what you are sitting on, so you see the deck and barrel in frame.
+
+The seat is a *request* rather than a one-shot switch, so it survives the game taking the camera
+away:
+
+- Pressing `F6` **while the gun sight (or the map) is up** leaves that view and takes the seat -
+  the manager's camera mode is reset instead of the seat giving up.
+- Switching to the gun sight yourself while seated hands the camera over and the seat **comes back
+  by itself** when you leave the gun sight. The same happens on `Restart` and on scene changes, so
+  the seat follows you into the next mission.
+- `F6` pressed while a scene is still loading waits for the tank to appear (up to a few seconds)
+  instead of failing on that frame.
+- `camera.commander_view` = `true` enters the seat automatically in the next mission.
 
 ## Vehicle overrides
 

@@ -57,7 +57,9 @@ Save). Tabs:
 Menu rows: click `<` / `>` either side of a value (the whole row also works - left half down, right half up).
 
 Other hotkeys: **F6** commander view (per-tank seats, `Alt` + arrows / `PgUp`/`PgDn` / wheel to move the
-eye, `Alt+S` to save).
+eye, `Alt+S` to save). The seat is a request, not a one-shot: F6 works from the gun sight (it resets
+`Camera_Manager_CS.Camera_Mode` and `Switch_Camera_Mode`), the seat yields to the gun sight and
+resumes by itself, and a request made during a scene load waits for the tank instead of failing.
 
 ## What was discovered (the useful part)
 
