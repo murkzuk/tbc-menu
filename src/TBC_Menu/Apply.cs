@@ -64,6 +64,12 @@ namespace TbcMenu
             return null;
         }
 
+        // Note: this changes the size of the buffer the game renders into. The game maps a screen
+        // position to the aim ray with Camera.ScreenPointToRay and keeps the reticle lined up by
+        // letterboxing the camera and scaling the reticle transform for Screen.width/height; a
+        // substituted buffer size puts the reticle and the ray out of step and the gun visibly
+        // trails the crosshair. internal_scale defaults to 0 (leave the buffer alone) for that
+        // reason - quality.render_scale is the safe way to supersample.
         private void SyncBuffer(string why)
         {
             try

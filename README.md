@@ -55,7 +55,7 @@ clicking cannot fire.
 
 | Tab | What it controls |
 |---|---|
-| **Resolution** | window size, fullscreen mode, internal render scale (0 = keep the stock 854x480 buffer), live buffer readout |
+| **Resolution** | window size, fullscreen mode, internal render scale (0 = keep the stock 854x480 buffer: **leave it there**, see the aiming note), live buffer readout |
 | **Visuals** | film grain, chromatic aberration, vignette, fog density, antialiasing (off/fxaa/smaa/taa), dithering, texture aniso, **commander view** |
 | **Quality** | MSAA 1-8x, main light shadowmap 1024-4096, soft shadow quality, shadow distance, render scale (supersampling above 1) |
 | **Effects** | tonemapping (none/neutral/ACES), bloom + threshold, exposure, contrast, saturation |
@@ -201,3 +201,18 @@ Source layout: `MenuMod.cs` (lifecycle and state), `Config.cs` (JSON shape and I
 MIT - see [LICENSE](LICENSE).
 
 Not affiliated with Chobi Softwear. No game assets are included or redistributed.
+## Aiming note (important)
+
+The game does not aim from the reticle's pixels: `Aiming_Control_CS` casts the shot with
+`Camera.main.ScreenPointToRay` and keeps the crosshair lined up by letterboxing the camera
+(`Fixed_Aspect_Camera_CS`, which recomputes the camera rect and the reticle's transform scale from
+`Screen.width/height`).
+
+**Resizing the game's 854x480 render buffer breaks that mapping.** The reticle and the ray part
+company: the gun trails left and down from the crosshair, worse the further from centre you aim.
+It looks like a turret or ballistics bug and is neither.
+
+So `resolution.internal_scale` defaults to **0** (leave the buffer alone). For sharpness use
+**Quality -> Render scale**, which supersamples inside the render pipeline and leaves the mapping
+intact; MSAA, anisotropy and the shadow settings are likewise safe. The menu labels the buffer row
+"Internal scale (breaks aim)" and points at Render scale instead.

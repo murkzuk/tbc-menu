@@ -21,7 +21,15 @@ namespace TbcMenu
         public int width = 1920;
         public int height = 1080;
         public int fullscreen_mode = 0;     // 0 exclusive, 1 borderless, 2 maximized, 3 windowed
-        public float internal_scale = 1.0f; // 0 = leave the game's own buffer alone
+        // 0 = leave the game's own 854x480 buffer alone (the default).
+        // Resizing that buffer breaks aiming: the game turns a screen position into the aim
+        // ray with Camera.ScreenPointToRay and keeps the reticle aligned by letterboxing the
+        // camera rect and scaling the reticle transform for Screen.width/height. Substitute a
+        // different buffer size and the reticle and the ray part company - the gun trails the
+        // crosshair, worse the further from centre you aim. Sharpness is better obtained from
+        // quality.render_scale, which supersamples inside the pipeline and leaves the mapping
+        // intact.
+        public float internal_scale = 0f;
         public bool fill_window = true;     // drop the fixed 16:9 letterbox
     }
 

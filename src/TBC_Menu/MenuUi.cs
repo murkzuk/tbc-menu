@@ -246,7 +246,8 @@ namespace TbcMenu
             AddChoiceRow(ref y, "Fullscreen mode", new[] { "Exclusive", "Borderless", "Maximized", "Windowed" },
                 () => new[] { "Exclusive", "Borderless", "Maximized", "Windowed" }[Mathf.Clamp(r.fullscreen_mode, 0, 3)],
                 s => { r.fullscreen_mode = Math.Max(0, Array.IndexOf(new[] { "Exclusive", "Borderless", "Maximized", "Windowed" }, s)); ApplyResolution(); });
-            AddFloatRow(ref y, "Internal scale", () => r.internal_scale, v => { r.internal_scale = v; SyncBuffer("menu"); }, 0.1f, 2f, 0.05f, "F2");
+            AddFloatRow(ref y, "Internal scale (breaks aim)", () => r.internal_scale, v => { r.internal_scale = v; SyncBuffer("menu"); }, 0.1f, 2f, 0.05f, "F2");
+            AddRow(ref y, "  use Render scale below", () => "safe supersampling", null, new Color(0.6f, 0.65f, 0.75f));
             AddRow(ref y, "Render buffer", () =>
             {
                 var rt = FindBuffer();
