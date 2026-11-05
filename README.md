@@ -216,3 +216,22 @@ So `resolution.internal_scale` defaults to **0** (leave the buffer alone). For s
 **Quality -> Render scale**, which supersamples inside the render pipeline and leaves the mapping
 intact; MSAA, anisotropy and the shadow settings are likewise safe. The menu labels the buffer row
 "Internal scale (breaks aim)" and points at Render scale instead.
+## Sharp rendering without breaking aim
+
+The game renders its 3D view into a fixed **854x480** buffer and stretches it over the window -
+that is the whole "PS1 filter". Two ways to get detail back, and one trap:
+
+- **Trap: resizing that buffer** (`resolution.internal_scale`). It sharpens nothing useful and
+  breaks aiming, because the game converts the reticle's screen position into buffer pixels with
+  `General_Settings_CS.Render_Texture_Width` / `Render_Texture_Height` (static, 854x480). Change
+  the buffer and those two disagree with reality: the gun trails left and down from the crosshair,
+  worse the further from centre you aim. It defaults to 0 (leave the buffer alone) for this reason.
+- **Working: Render direct to screen** (`resolution.bypass_buffer`, Resolution tab). The 3D cameras
+  render to the window instead of into the buffer and the stretching canvas is hidden, so the
+  picture is native resolution. Because that alone would put the same 854x480 conversion out of
+  step, the mod also sets the two constants to the real surface size. Result: sharp **and** the
+  gun tracks the crosshair.
+- **Safe but soft:** Quality -> Render scale supersamples inside the pipeline. It cleans edges and
+  cannot add detail, because the output is still 854x480. Harmless with or without the bypass.
+
+MSAA, anisotropy, shadows and the post effects are all safe either way.

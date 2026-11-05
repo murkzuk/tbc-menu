@@ -31,6 +31,13 @@ namespace TbcMenu
         // intact.
         public float internal_scale = 0f;
         public bool fill_window = true;     // drop the fixed 16:9 letterbox
+
+        // Render the 3D cameras straight to the window instead of into the game's 854x480
+        // buffer, and hide the canvas that would otherwise stretch that buffer. This is the only
+        // way to get real detail (the stock buffer caps it), and it leaves the aim mapping in
+        // plain screen space. Experimental: the HUD, gun sight and the game's own aspect handling
+        // all have to keep working.
+        public bool bypass_buffer = false;
     }
 
     public class VisualCfg

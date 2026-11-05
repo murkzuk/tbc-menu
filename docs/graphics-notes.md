@@ -105,3 +105,20 @@ curves without having to back out to the mission menu.
   with `save_backup.json` beside it.
 - The game uses legacy `UnityEngine.Input` for key polling (F11, and the menu confirm keys), so
   `Input.GetKeyDown` works in mods even though the Input System package is present.
+## Aiming is tied to the buffer constants (found 2026-11-05)
+
+`Aiming_Control_CS.Cast_Ray_Free(screenPos)` casts with `Camera.main.ScreenPointToRay`. The screen
+position is the reticle's, and the game converts it into buffer pixels using
+`General_Settings_CS.Render_Texture_Width` / `Render_Texture_Height` - **static fields initialised
+to 854x480**, not read from the actual surface. Consequences, all confirmed in game:
+
+| change | result |
+|---|---|
+| stock (buffer 854x480) | aim correct |
+| resize the buffer to 1920x1080 | gun trails left/low of the crosshair, worse with distance from centre |
+| render cameras to the screen, buffer canvas hidden, constants left alone | **same error** |
+| render to the screen **and** set the constants to 1920x1080 | aim correct, picture sharp |
+
+So any change to where the 3D is drawn has to be mirrored in those two fields. They are
+`static readonly` in metadata but Il2CppInterop exposes them as writable, so the mod sets them
+when `resolution.bypass_buffer` is on and restores them when it is turned off.

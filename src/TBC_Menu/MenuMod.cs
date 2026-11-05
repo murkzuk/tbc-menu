@@ -61,6 +61,7 @@ namespace TbcMenu
         {
             OnSceneChangedCommander(); // scene objects are gone; the request survives if it was open
             ResetVehicleSnaps();       // new tanks, new first-seen values
+            ResetDiag();               // fresh three dumps for each scene
             if (!_cfg.enabled) return;
             ApplyAll("scene " + sceneName);
             _nextTick = 0f;
@@ -72,6 +73,7 @@ namespace TbcMenu
             {
                 if (Input.GetKeyDown(KeyCode.F7)) Toggle();
                 if (Input.GetKeyDown(KeyCode.F6)) ToggleCommanderView();
+                if (Input.GetKeyDown(KeyCode.F8)) DumpUiGeometry();
             }
             catch (Exception e) { LoggerInstance.Warning("hotkey: " + e.Message); }
 
@@ -90,6 +92,7 @@ namespace TbcMenu
             ApplyTuningRuntime("tick");
             ApplyVehicleOverrides();
             SyncBuffer("tick");
+            AutoDiag();
         }
 
         private void Toggle()

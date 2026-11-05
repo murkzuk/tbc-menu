@@ -41,6 +41,101 @@ namespace TbcMenu
                 Screen.SetResolution(r.width, r.height, mode);
             }
             catch (Exception e) { LoggerInstance.Warning("resolution: " + e.Message); }
+            ApplyBufferBypass();
+        }
+
+        // ---- render straight to the screen instead of into the 854x480 buffer ---------------
+        private readonly System.Collections.Generic.Dictionary<int, RenderTexture> _bypassed =
+            new System.Collections.Generic.Dictionary<int, RenderTexture>();
+        private GameObject _bufferCanvas;
+        private int _origRTW = -1, _origRTH = -1;
+
+        private void ApplyBufferBypass()
+        {
+            var r = _cfg.resolution;
+            bool want = r != null && r.bypass_buffer;
+            try
+            {
+                var buf = FindBuffer();
+                if (!want)
+                {
+                    if (_bypassed.Count == 0 && _bufferCanvas == null) return;
+                    foreach (var cam in Camera.allCameras)
+                    {
+                        if (cam == null) continue;
+                        if (_bypassed.TryGetValue(cam.GetInstanceID(), out var tex) && tex != null)
+                            cam.targetTexture = tex;
+                    }
+                    _bypassed.Clear();
+                    if (_bufferCanvas != null) _bufferCanvas.SetActive(true);
+                    _bufferCanvas = null;
+                    if (_origRTW > 0)
+                    {
+                        try
+                        {
+                            General_Settings_CS.Render_Texture_Width = _origRTW;
+                            General_Settings_CS.Render_Texture_Height = _origRTH;
+                        }
+                        catch { }
+                    }
+                    LoggerInstance.Msg("buffer bypass off - restoring the game's buffer");
+                    return;
+                }
+                if (buf == null) return;
+
+                int n = 0;
+                foreach (var cam in Camera.allCameras)
+                {
+                    if (cam == null || cam.targetTexture == null) continue;
+                    if (cam.targetTexture != buf) continue;
+                    int id = cam.GetInstanceID();
+                    if (!_bypassed.ContainsKey(id)) _bypassed[id] = cam.targetTexture;
+                    cam.targetTexture = null;
+                    n++;
+                }
+                // hide the RawImage canvas that stretches the buffer, or it would cover the screen
+                if (_bufferCanvas == null)
+                {
+                    try
+                    {
+                        foreach (var canvas in Resources.FindObjectsOfTypeAll<Canvas>())
+                        {
+                            if (canvas == null || canvas.name != "Canvas (Main RT)") continue;
+                            _bufferCanvas = canvas.gameObject;
+                            break;
+                        }
+                    }
+                    catch { }
+                    if (_bufferCanvas != null) _bufferCanvas.SetActive(false);
+                }
+                // Tell the game what surface it is really drawing into. Its aim maths converts the
+                // reticle position into buffer pixels using these constants, so leaving them at
+                // 854x480 while the camera renders full-screen puts the ray off by the ratio.
+                if (_origRTW < 0)
+                {
+                    try
+                    {
+                        _origRTW = General_Settings_CS.Render_Texture_Width;
+                        _origRTH = General_Settings_CS.Render_Texture_Height;
+                    }
+                    catch { _origRTW = 854; _origRTH = 480; }
+                }
+                try
+                {
+                    LoggerInstance.Msg($"RT constants now {General_Settings_CS.Render_Texture_Width}x{General_Settings_CS.Render_Texture_Height}, " +
+                                       $"screen {Screen.width}x{Screen.height}, saved originals {_origRTW}x{_origRTH}");
+                    if (General_Settings_CS.Render_Texture_Width != Screen.width)
+                    {
+                        General_Settings_CS.Render_Texture_Width = Screen.width;
+                        General_Settings_CS.Render_Texture_Height = Screen.height;
+                        LoggerInstance.Msg($"render buffer constants -> {Screen.width}x{Screen.height} (were {_origRTW}x{_origRTH})");
+                    }
+                }
+                catch (Exception e) { LoggerInstance.Warning("buffer constants: " + e.Message); }
+
+                if (n > 0) LoggerInstance.Msg($"buffer bypass on: {n} camera(s) render to the screen, buffer canvas hidden");
+            }
+            catch (Exception e) { LoggerInstance.Warning("buffer bypass: " + e.Message); }
         }
 
         private RenderTexture FindBuffer()
