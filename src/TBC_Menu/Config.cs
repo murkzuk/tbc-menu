@@ -37,7 +37,7 @@ namespace TbcMenu
         // way to get real detail (the stock buffer caps it), and it leaves the aim mapping in
         // plain screen space. Experimental: the HUD, gun sight and the game's own aspect handling
         // all have to keep working.
-        public bool bypass_buffer = false;
+        public bool bypass_buffer = true;
     }
 
     public class VisualCfg

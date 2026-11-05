@@ -1,8 +1,8 @@
 # TBC Menu
 
 MelonLoader mod for **Tank Battle Classic**. Adds an in-game settings menu (F7) for things the
-game does not expose: real screen resolution, the internal render resolution, the post-process
-filter, URP quality settings, and optional gameplay/AI tuning.
+game does not expose: real screen resolution and native-resolution rendering, the post-process
+filter, URP quality settings, per-tank vehicle values and optional gameplay/AI tuning.
 
 Unofficial. Contains no game content. Buy the game:
 https://store.steampowered.com/app/5086560/Tank_Battle_Classic/
@@ -10,20 +10,23 @@ https://store.steampowered.com/app/5086560/Tank_Battle_Classic/
 Author: **murkzuk** - https://github.com/murkzuk
 
 **Built by DeepSeek** - an AI agent wrote the code, did the reverse engineering behind
-[docs/graphics-notes.md](docs/graphics-notes.md) and wrote this documentation, at murkzuk's
-request. murkzuk asked for it, directed the work, tested it, and owns the result.
+[docs/graphics-notes.md](docs/graphics-notes.md) and [docs/vehicle-model.md](docs/vehicle-model.md),
+and wrote this documentation, at murkzuk's request. murkzuk asked for it, directed the work, tested
+it, and owns the result.
 
 ![menu](docs/screenshot-menu.png)
 
 ## Why this exists
 
 The game ships locked to your desktop resolution and renders the 3D view into a fixed
-854x480 point-filtered buffer, then stretches it to the window over a post-process stack of
-film grain 0.5, chromatic aberration 0.15 and vignette 0.2. That combination is what makes it
-look soft and noisy. None of it is exposed in the game's Settings menu.
+**854x480 point-filtered buffer**, then stretches it to the window over a post-process stack of
+film grain 0.5, chromatic aberration 0.15 and vignette 0.2. That combination is the whole "PS1
+filter": the art itself is full resolution (2048x2048 albedos), and none of it is exposed in the
+game's Settings menu.
 
-This mod makes all of it adjustable at runtime. The background and the exact numbers are in
-[docs/graphics-notes.md](docs/graphics-notes.md).
+This mod removes the filter and makes the pipeline adjustable at runtime - including, since 1.7,
+drawing the 3D view at native resolution instead of into that buffer. The background, the measured
+numbers and the traps are in [docs/graphics-notes.md](docs/graphics-notes.md).
 
 ## Requirements
 
@@ -55,19 +58,47 @@ clicking cannot fire.
 
 | Tab | What it controls |
 |---|---|
-| **Resolution** | window size, fullscreen mode, internal render scale (0 = keep the stock 854x480 buffer: **leave it there**, see the aiming note), live buffer readout |
+| **Resolution** | window size, fullscreen mode, **Render direct to screen**, internal buffer scale (0 = stock buffer - leave it there, see below), live buffer readout |
 | **Visuals** | film grain, chromatic aberration, vignette, fog density, antialiasing (off/fxaa/smaa/taa), dithering, texture aniso, **commander view** |
-| **Quality** | MSAA 1-8x, main light shadowmap 1024-4096, soft shadow quality, shadow distance, render scale (supersampling above 1) |
+| **Quality** | MSAA 1-8x, main light shadowmap 1024-4096, soft shadow quality, shadow distance, render scale (supersampling) |
 | **Effects** | tonemapping (none/neutral/ACES), bloom + threshold, exposure, contrast, saturation |
 | **Vehicle** | per-tank top speed, turret traverse, gun elevation, acceleration and torque, plus a realism table and a live speed readout |
 | **Tuning** | tuning multiplier scales, max tuning levels, AI preset and scales, AI passive, unlock all tanks, points |
+
+**F8** dumps the render/UI geometry to `MelonLoader\Latest.log` (cameras, viewport rects, canvases,
+canvas scalers, reticle transforms). It is a diagnostic, useful when something looks misaligned.
+
+## Sharp rendering, and the aiming trap
+
+The 854x480 buffer caps detail: supersampling inside the pipeline cleans edges but cannot add any,
+because the result is still 854x480 and then stretched.
+
+**Render direct to screen** (`resolution.bypass_buffer`, Resolution tab) fixes that. The 3D cameras
+draw to the window instead of into the buffer and the canvas that stretches the buffer is hidden,
+so the picture is native resolution.
+
+It has one non-obvious requirement. The game converts the reticle's screen position into buffer
+pixels using `General_Settings_CS.Render_Texture_Width` / `Render_Texture_Height` - **static fields
+initialised to 854x480**, never read from the real surface. Anything that changes where the 3D view
+is drawn has to be mirrored in those two fields, or the aim goes wrong. Measured in game:
+
+| change | aim |
+|---|---|
+| stock (854x480 buffer) | correct |
+| resize the buffer to 1920x1080 (`internal_scale`) | gun trails left and low of the crosshair, worse away from centre |
+| draw to the screen, buffer canvas hidden, constants left alone | **same error** |
+| draw to the screen **and** set the constants to the surface size | **correct, and sharp** |
+
+So the bypass sets those constants and restores them when switched off, `internal_scale` defaults
+to 0 (its row is labelled "breaks aim"), and for a safe but softer improvement use
+**Quality -> Render scale**. MSAA, anisotropy, shadows and the post effects are safe either way.
 
 ## Commander view (F6)
 
 The game only has third person, the gun sight and the map. **F6** adds a first-person seat on the
 turret.
 
-The camera keeps its original parent — it must **not** be parented to the turret. This game slaves
+The camera keeps its original parent - it must **not** be parented to the turret. This game slaves
 the turret to the camera's forward direction (`Aiming_Control_CS`), so a turret-parented camera
 creates a feedback loop and the turret spins endlessly (fixed in 1.2.1). Instead the observer point
 is placed on the turret and the camera's world pose is driven directly every frame, with
@@ -122,28 +153,40 @@ snap around like a tank in an arcade game. This tab replaces those numbers per t
 
 Entries are keyed by `Tank_Prop_SO.Tank_Name` ("T-34/76", "Tiger I"); the **Tank** row in the menu
 cycles through the tanks in the current mission and edits the selected one. **Load realism table**
-fills in the six tanks that were measured; **Dump vehicle values** writes every live value,
-including the flags, to `UserData\TBC_Vehicles.json`.
+fills in the values for the whole roster; **Dump vehicle values** writes every live value, including
+the drive flags and world positions, to `UserData\TBC_Vehicles.json`.
 
 Two things worth knowing before you tune:
 
 - **Torque is not the speed or acceleration lever.** Measured in game, 2100 and 3000 torque
-  produced byte-identical acceleration: the wheels are already at their angular-velocity cap and
-  the hull is traction-limited. Top speed is `maxAngVelocity * wheel radius`, and that cap is a
+  produced identical acceleration: the wheels are already at their angular-velocity cap and the
+  hull is traction-limited. Top speed is `maxAngVelocity * wheel radius`, and that cap is a
   private field the wheel parent computes once from `Max_Speed` - which is why the mod re-runs it.
 - **The ramp is the lever.** `Acceleration_Time` only takes effect when `Acceleration_Flag` is on,
   `Sync_Speed_Rate` is off, and the cached `acceleRate` is refreshed; the mod sets all three when
-  `accel_time` is given. That is what stops every tank accelerating like a go-kart.
-  Note it disables the game's speed synchronisation for that tank, which has not been tested on
-  hills.
+  `accel_time` is given. That is what stops every tank accelerating like a go-kart. Note it
+  disables the game's speed synchronisation for that tank, which has not been tested on hills.
+- **Historical turret traverse is slow.** 5 deg/s (T-34/76) means a 30 degree swing takes six
+  seconds while the crosshair moves instantly, so the gun visibly trails the reticle. That is
+  realism fighting the game's mouse aiming, not a bug - soften the `traverse` values if it bothers
+  you, or drop the key entirely to keep the stock rate.
 
 The full reverse-engineering write-up, with field offsets and the measured curves, is in
 [docs/vehicle-model.md](docs/vehicle-model.md).
 
+## Custom scenarios
+
+[docs/terrain-and-scenarios.md](docs/terrain-and-scenarios.md) covers what a map is in this game,
+how the six shipped terrains measure up, and how to build a custom scenario (including stretching a
+terrain's horizontal scale to turn steep gullies into rolling ground). That work uses the separate
+[TankBattleMissionEditor](https://github.com/fiermanb/TankBattleMissionEditor); nothing in this mod
+touches game files.
+
 ## Defaults
 
-Resolution and the visual cleanup are on; quality is raised (MSAA 4x, 2048 shadowmap, high soft
-shadows, 200 m shadow distance); effects, tuning and vehicle overrides are **off**.
+Resolution, the visual cleanup and **Render direct to screen** are on; quality is raised (MSAA 8x,
+2048 shadowmap, high soft shadows, 200 m shadow distance, render scale 2); effects, tuning and
+vehicle overrides are **off**.
 
 ## Compatibility
 
@@ -162,6 +205,11 @@ See [TODO.md](TODO.md) for the backlog and the measured game-vs-real-life data.
 
 - Unity stripped the IMGUI module from this build, so the UI is uGUI with manual hit-testing.
   It is not resizable or scrollable; it is a panel with fixed rows.
+- **Render direct to screen is newer than the rest.** Third person, driving, the HUD, messages and
+  the gun sight were checked; the map camera and unusual camera states have had less testing. If
+  something looks wrong, turn the toggle off - it takes effect immediately.
+- The bypass hides the canvas that displays the buffer. Anything the game draws into that buffer
+  other than the 3D view will not appear.
 - Effects are added to the scene's volume profile at runtime. If the game ever ships its own
   Bloom/Tonemapping components, the mod will use those instead of creating new ones.
 - The **Tuning** tab writes into live player data, which the game saves on exit. Back up
@@ -182,16 +230,16 @@ environment variable, create a `Local.props` with `<GameDir>...</GameDir>`, or p
 `build.ps1` produces `dist\TBC_Menu-<version>.zip` containing the DLL, README and licence.
 
 Source layout: `MenuMod.cs` (lifecycle and state), `Config.cs` (JSON shape and IO),
-`Apply.cs` (visuals, quality, effects, tuning), `Vehicle.cs` (per-tank vehicle overrides),
-`Camera.cs` (commander view), `MenuUi.cs` (the uGUI menu).
+`Apply.cs` (resolution, buffer bypass, visuals, quality, effects, tuning), `Vehicle.cs` (per-tank
+vehicle overrides), `Camera.cs` (commander view), `MenuUi.cs` (the uGUI menu),
+`Diag.cs` (the F8 geometry dump).
 
 ## Credits
 
 - **Built by DeepSeek** (AI), at the request of **murkzuk**. The mod, the reverse-engineering
-  notes and this README were produced by the model in a single session; every step was driven
-  by murkzuk's requests and validated by running the game.
-- **Requested, directed and tested by murkzuk** (https://github.com/murkzuk), who owns the
-  result and chose to keep the repository private.
+  notes and this README were produced by the model; every step was driven by murkzuk's requests and
+  validated by running the game.
+- **Requested, directed and tested by murkzuk** (https://github.com/murkzuk), who owns the result.
 - Thanks to **fierman** for
   [TankBattleMissionEditor](https://github.com/fiermanb/TankBattleMissionEditor), whose approach
   to regenerating the game's stripped type trees is described in the notes.
@@ -201,37 +249,3 @@ Source layout: `MenuMod.cs` (lifecycle and state), `Config.cs` (JSON shape and I
 MIT - see [LICENSE](LICENSE).
 
 Not affiliated with Chobi Softwear. No game assets are included or redistributed.
-## Aiming note (important)
-
-The game does not aim from the reticle's pixels: `Aiming_Control_CS` casts the shot with
-`Camera.main.ScreenPointToRay` and keeps the crosshair lined up by letterboxing the camera
-(`Fixed_Aspect_Camera_CS`, which recomputes the camera rect and the reticle's transform scale from
-`Screen.width/height`).
-
-**Resizing the game's 854x480 render buffer breaks that mapping.** The reticle and the ray part
-company: the gun trails left and down from the crosshair, worse the further from centre you aim.
-It looks like a turret or ballistics bug and is neither.
-
-So `resolution.internal_scale` defaults to **0** (leave the buffer alone). For sharpness use
-**Quality -> Render scale**, which supersamples inside the render pipeline and leaves the mapping
-intact; MSAA, anisotropy and the shadow settings are likewise safe. The menu labels the buffer row
-"Internal scale (breaks aim)" and points at Render scale instead.
-## Sharp rendering without breaking aim
-
-The game renders its 3D view into a fixed **854x480** buffer and stretches it over the window -
-that is the whole "PS1 filter". Two ways to get detail back, and one trap:
-
-- **Trap: resizing that buffer** (`resolution.internal_scale`). It sharpens nothing useful and
-  breaks aiming, because the game converts the reticle's screen position into buffer pixels with
-  `General_Settings_CS.Render_Texture_Width` / `Render_Texture_Height` (static, 854x480). Change
-  the buffer and those two disagree with reality: the gun trails left and down from the crosshair,
-  worse the further from centre you aim. It defaults to 0 (leave the buffer alone) for this reason.
-- **Working: Render direct to screen** (`resolution.bypass_buffer`, Resolution tab). The 3D cameras
-  render to the window instead of into the buffer and the stretching canvas is hidden, so the
-  picture is native resolution. Because that alone would put the same 854x480 conversion out of
-  step, the mod also sets the two constants to the real surface size. Result: sharp **and** the
-  gun tracks the crosshair.
-- **Safe but soft:** Quality -> Render scale supersamples inside the pipeline. It cleans edges and
-  cannot add detail, because the output is still 854x480. Harmless with or without the bypass.
-
-MSAA, anisotropy, shadows and the post effects are all safe either way.
