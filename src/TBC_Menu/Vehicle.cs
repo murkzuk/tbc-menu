@@ -602,9 +602,9 @@ namespace TbcMenu
         // Acceleration_Time and the wheels follow that ramp. Torque is left at the game value.
         // Road top speed (m/s), turret traverse (deg/s), time from standstill to full speed (s).
         // The first six were measured in game (dumps + speedometer). The rest are historical
-        // estimates for the vehicles the game ships - the list of 19 comes from the roster the
-        // Kursk scenario declares (TankBattleMissionEditor meta.json), and a key only takes
-        // effect if it matches Tank_Prop_SO.Tank_Name exactly (the vehicle dump prints those).
+        // estimates. Every key below is an exact Tank_Prop_SO.Tank_Name, taken from the game's
+        // tank catalogue (20 entries: 19 vehicles plus "Tiger I (L)", which is the late build and
+        // has its own name). AI variants share the same Tank_Name, so one entry covers both.
         private static readonly (string name, float mps, float traverse, float accel)[] RealismTable =
         {
             // measured in game
@@ -612,13 +612,14 @@ namespace TbcMenu
             ("Jagdpanther", 12.8f,  5f, 22f),
             ("T-34/76",     14.7f,  5f, 24f),
             ("Tiger I",     12.7f,  8f, 26f),
+            ("Tiger I (L)", 12.7f,  8f, 26f),   // same vehicle, late build - its own Tank_Name
             ("Hetzer",      11.7f,  6f, 26f),
             ("Tiger II",    11.5f,  9f, 30f),
             // estimates: historical figures against the game's stock numbers
             ("T-34/85",     14.7f, 20f, 26f),   // electric traverse, far quicker than the /76
             ("Panther G",   12.8f, 20f, 24f),   // hydraulic traverse, engine-rpm dependent
             ("Pz. III J",   11.1f, 18f, 18f),
-            ("Pz. IV",      11.1f, 16f, 20f),
+            ("Pz. IV G",    11.1f, 16f, 20f),
             ("StuG III",    11.1f,  6f, 22f),   // casemate: limited arc, slow hand traverse
             ("KV-1",         9.7f,  5f, 32f),
             ("KV-2",         7.8f,  4f, 40f),   // very heavy turret
