@@ -143,6 +143,28 @@ Verified facts worth keeping:
 Natural overlap with this mod: the editor cannot change per-vehicle combat values, so a per-tank realism
 table here (TODO item) and a custom scenario there are complementary.
 
+## Custom scenarios (2026-11-05, unsupervised session)
+
+Two custom missions are installed in the game under the editor's **Custom Missions** page:
+`TBC proof - waypoints and timers` (city terrain) and `TBC rolling ground` (a 2.5x stretched
+Mountain terrain, the one that plays as rolling hills). Both are backed up in the editor's
+`backups\<slug>\scenarios\` and can be removed with `Scenario > Remove scenario`.
+
+The whole workflow is scriptable with the editor's own Python modules - no GUI needed:
+`ScenarioManager.create`, `TerrainPaint.ensure_copy`, `SceneModel.set_field` /
+`new_route` / `new_waypoint`, `briefing_sync.sync_mission`, `navmesh_edit.NavMesh`,
+`ScenarioBackups.backup`. Working notes and the evidence are in
+`docs/terrain-and-scenarios.md` (repo) and `scratch\rolling-hills-scenario.md` (workspace).
+
+Key facts: a terrain's world size is `m_Heightmap.m_Scale` x/z (an 8-byte patch to stretch);
+stretching alone keeps cliff structure, so heights also need a blur and an amplitude scale;
+~2.5 deg mean slope with ~9 m of relief over 2.5 km is the band that still reads as hills;
+`Trigger_Tanks` holds Transform pids; AI pathing needs the route map rebuilt after any terrain or
+object change.
+
+Still open there: the mission-complete event is wired to the single enemy but has not been played
+through by actually killing it; 7 unused hostile spawns remain deactivated in the scene.
+
 ## Housekeeping
 
 - Back up `save.json` before using **Unlock all tanks** or **Points** - they write into live player data
