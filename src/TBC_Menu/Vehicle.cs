@@ -600,14 +600,33 @@ namespace TbcMenu
         // seconds. accel_time is the column that matters: measured in game, halving or doubling
         // Torque changes nothing on flat ground, because the drive ramps Speed_Rate over
         // Acceleration_Time and the wheels follow that ramp. Torque is left at the game value.
+        // Road top speed (m/s), turret traverse (deg/s), time from standstill to full speed (s).
+        // The first six were measured in game (dumps + speedometer). The rest are historical
+        // estimates for the vehicles the game ships - the list of 19 comes from the roster the
+        // Kursk scenario declares (TankBattleMissionEditor meta.json), and a key only takes
+        // effect if it matches Tank_Prop_SO.Tank_Name exactly (the vehicle dump prints those).
         private static readonly (string name, float mps, float traverse, float accel)[] RealismTable =
         {
+            // measured in game
             ("Pz. III N",   11.1f, 16f, 18f),
             ("Jagdpanther", 12.8f,  5f, 22f),
             ("T-34/76",     14.7f,  5f, 24f),
             ("Tiger I",     12.7f,  8f, 26f),
             ("Hetzer",      11.7f,  6f, 26f),
             ("Tiger II",    11.5f,  9f, 30f),
+            // estimates: historical figures against the game's stock numbers
+            ("T-34/85",     14.7f, 20f, 26f),   // electric traverse, far quicker than the /76
+            ("Panther G",   12.8f, 20f, 24f),   // hydraulic traverse, engine-rpm dependent
+            ("Pz. III J",   11.1f, 18f, 18f),
+            ("Pz. IV",      11.1f, 16f, 20f),
+            ("StuG III",    11.1f,  6f, 22f),   // casemate: limited arc, slow hand traverse
+            ("KV-1",         9.7f,  5f, 32f),
+            ("KV-2",         7.8f,  4f, 40f),   // very heavy turret
+            ("IS-2",        10.3f,  7f, 34f),
+            ("Sd.Kfz.251",  14.7f, 12f, 24f),
+            ("Pakwagen",    22.2f, 12f, 20f),   // Sd.Kfz.234/4, 80 km/h on road
+            ("BT-7",        14.4f, 12f, 18f),   // fast cruiser, in game 55 km/h
+            ("BT-42",       13.0f,  6f, 22f),   // BT-7 chassis, much heavier turret
         };
 
         private void LoadRealismTable()

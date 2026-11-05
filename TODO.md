@@ -69,24 +69,45 @@ Accel times are estimates from power/weight and period trials, not measured on a
 treat them as a starting point. Speeds and traverse rates are the measured in-game values against
 the historical figures from the earlier dumps.
 
-### Tanks still to add
+### The vehicle roster (19) and where each entry stands
 
-The tank names below are the historical vehicles; the **keys** have not been confirmed against
-`Tank_Prop_SO.Tank_Name` yet. Run **Dump vehicle values** in a mission that contains them (or in
-the garage) and copy the `tankTypes` list, then add the entries:
+The scenario editor's Kursk pack declares the game's full playable roster (`meta.json` ->
+`player_tanks`), which is the ground truth for what exists:
 
-| Tank | speed | traverse | notes |
-|---|---|---|---|
-| Panther G | 12.8 m/s (46) | 18-24 deg/s | hydraulic traverse, rpm dependent |
-| KV-1 | 9.7 (35) | 4-5 | hand traverse |
-| KV-2 | 7.8 (28) | 4 | very slow, heavy turret |
-| IS-2 | 10.3 (37) | 6-8 | electric traverse |
-| T-34/85 | 14.7 (53) | 20-25 | electric traverse, much faster than the /76 |
-| StuG III | 11.1 (40) | - | casemate, no turret |
-| Sd.Kfz.251 | 14.7 (53) | - | halftrack |
-| Pakwagen | 22.2 (80) | - | |
-| BT-7 | 14.4 (52) | - | wheels/tracks |
-| BT-42 | - | - | |
+| Asset (`*_TankProp`) | Table key | Status |
+|---|---|---|
+| `T-34_76` | `T-34/76` | **measured** |
+| `Tiger-I` | `Tiger I` | **measured** |
+| `Tiger-II` | `Tiger II` | **measured** |
+| `Hetzer` | `Hetzer` | **measured** |
+| `Jagdpanther` | `Jagdpanther` | **measured** |
+| `Panzer-III_N` | `Pz. III N` | **measured** |
+| `T-34_85`, `Panther-G`, `Panzer-III_J`, `Panzer-IV`, `StuG-III_Late`, `KV-1`, `KV-2`, `IS-2`, `Sdkfz251`, `Sdkfz251_Pakwagen`, `BT-7`, `BT-42` | guess | estimates in the table, **key unconfirmed** |
+| `Tiger-I_Late` | `Tiger I`? | probably the same `Tank_Name` as `Tiger-I`, so one entry covers both |
+
+`BT-7` was confirmed from a live dump; every other guess needs one dump taken in a mission that
+spawns that vehicle (`F7 -> Vehicle -> Dump vehicle values`, then read `tankTypes` and the per-drive
+`tank` field). A wrong key is harmless - it simply never matches.
+
+## Open: does an AI actually patrol a waypoint pack?
+
+Setting a spawn's **Waypoint pack** in the editor does link it (the Waypoints table's `Used by`
+column reads the tank), and in game the AI drove ~35 m from its spawn towards the route - then
+stalled about 4 m short of a waypoint at ~4 cm/s, wheels turning at 5.7 rad/s against a hull speed
+of 0.04 m/s.
+
+Next step is a controlled retest on the proof scenario (`level68`, "Custom Missions" page):
+
+1. `Scenario -> Rebuild AI route map`, then Ctrl+S.
+2. Move the route onto open ground well away from the player's spawn (the four waypoints currently
+   sit ~6 m from the BT-7).
+3. Launch, start the mission, and dump twice a minute apart - the figures to compare are the
+   `kind: "drive"` rows' `posX`/`posZ`, `speedRate` and `velocity_mps`.
+
+If the AI walks the waypoints after step 1, the earlier stall was the AI route map (the editor warns
+that after an empty-terrain strip the navmap only approximates the game's). If it still creeps, the
+route itself or the terrain under it is the problem, and the next test is the same route on a
+*copied mission* instead of an empty terrain.
 
 ## Backlog
 
