@@ -122,3 +122,35 @@ to 854x480**, not read from the actual surface. Consequences, all confirmed in g
 So any change to where the 3D is drawn has to be mirrored in those two fields. They are
 `static readonly` in metadata but Il2CppInterop exposes them as writable, so the mod sets them
 when `resolution.bypass_buffer` is on and restores them when it is turned off.
+
+Confirmed end to end rather than by eye: a gun-sight kill at **247 m**, one shot, hit angle
+39.1 deg, `Penetration 60.6/30.0 mm`, with the constants at 1920x1080 and the game's own results
+screen recording `Hit_Ratio 100.0`. A scale error in those constants is metres wide at that range.
+
+## Every camera that takes the buffer has to be covered (2026-11-05, fixed in 1.7.1)
+
+The buffer is shared by more cameras than the two that are always running. Measured with the F8
+geometry dump, `bypass_buffer` on, mod 1.7.0:
+
+| state | camera | target before the fix | what it looked like |
+|---|---|---|---|
+| third person | `Camera (Background)`, `Camera (Main)` | screen (redirected) | correct, sharp |
+| gun sight (right mouse) | `Gun_Camera`, fov 5.6 | **854x480** | dark scope disc, reticle, **no world** |
+| map (middle mouse) | `Camera (Map)`, fov 30 | **854x480** | **blank screen** |
+
+Both of those cameras are inactive until their mode is switched on, and an inactive camera is not
+in `Camera.allCameras` - so a bypass applied once at scene load never sees them, and with the
+canvas that displays the buffer hidden there is nothing left to show. 1.7.1 runs the redirect
+every frame in `LateUpdate` instead and resets its tracking per scene, so the log names each
+camera as it is caught:
+
+    buffer bypass: camera 'Gun_Camera' now draws to the screen (had the 854x480 buffer), 3 redirected
+
+Verified in the same mission: gun sight and map both render at native resolution, and the map's
+markers stay on their tanks.
+
+**Left over:** the buffer is found through the full-screen RawImage that displays it, and a
+briefing screen has a second RawImage holding the **256x256 minimap** RenderTexture, so in that
+scene the wrong texture can be picked (log: `camera 'Camera (Map)' ... (had the 256x256 buffer)`).
+Battle scenes are unaffected. The robust identification is "the RenderTexture the world cameras
+render into", i.e. never one below about 512 px.

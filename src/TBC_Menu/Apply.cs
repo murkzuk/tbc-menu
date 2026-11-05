@@ -45,69 +45,66 @@ namespace TbcMenu
         }
 
         // ---- render straight to the screen instead of into the 854x480 buffer ---------------
+        //
+        // The game draws the 3D view into a small RenderTexture and puts that texture on screen
+        // through a full screen RawImage ("Canvas (Main RT)"). More than one camera shares the
+        // buffer, but not all at the same time: the third person camera and the background camera
+        // are always there, while Gun_Camera (gun sight) and Camera (Map) only exist while their
+        // mode is switched on - the game gives them the buffer at that moment. An inactive camera
+        // is not in Camera.allCameras, so a single pass at scene load misses them, and the gun
+        // sight and the map then render into a buffer whose canvas is hidden: a blank screen with
+        // the reticle drawn over it (measured in game 1.2.0 / mod 1.7.0). So the bypass is
+        // *maintained* every frame instead of applied once.
         private readonly System.Collections.Generic.Dictionary<int, RenderTexture> _bypassed =
             new System.Collections.Generic.Dictionary<int, RenderTexture>();
         private GameObject _bufferCanvas;
+        private RenderTexture _bufferTex;
+        private float _nextCanvasFind, _nextConstantsLog;
         private int _origRTW = -1, _origRTH = -1;
 
         private void ApplyBufferBypass()
         {
             var r = _cfg.resolution;
-            bool want = r != null && r.bypass_buffer;
+            if (r == null || !r.bypass_buffer) { RestoreBufferBypass(); return; }
+            MaintainBufferBypass();
+        }
+
+        // Runs every frame from OnLateUpdate: a handful of cameras, and it only logs on a change.
+        private void MaintainBufferBypass()
+        {
             try
             {
-                var buf = FindBuffer();
-                if (!want)
-                {
-                    if (_bypassed.Count == 0 && _bufferCanvas == null) return;
-                    foreach (var cam in Camera.allCameras)
-                    {
-                        if (cam == null) continue;
-                        if (_bypassed.TryGetValue(cam.GetInstanceID(), out var tex) && tex != null)
-                            cam.targetTexture = tex;
-                    }
-                    _bypassed.Clear();
-                    if (_bufferCanvas != null) _bufferCanvas.SetActive(true);
-                    _bufferCanvas = null;
-                    if (_origRTW > 0)
-                    {
-                        try
-                        {
-                            General_Settings_CS.Render_Texture_Width = _origRTW;
-                            General_Settings_CS.Render_Texture_Height = _origRTH;
-                        }
-                        catch { }
-                    }
-                    LoggerInstance.Msg("buffer bypass off - restoring the game's buffer");
-                    return;
-                }
-                if (buf == null) return;
+                if (_cfg == null || !_cfg.enabled || _cfg.resolution == null || !_cfg.resolution.bypass_buffer) return;
+                if (_bufferTex == null) _bufferTex = FindBuffer();
+                if (_bufferTex == null) return;
 
-                int n = 0;
                 foreach (var cam in Camera.allCameras)
                 {
-                    if (cam == null || cam.targetTexture == null) continue;
-                    if (cam.targetTexture != buf) continue;
+                    if (cam == null) continue;
+                    var tex = cam.targetTexture;
+                    if (tex == null || tex != _bufferTex) continue;
                     int id = cam.GetInstanceID();
-                    if (!_bypassed.ContainsKey(id)) _bypassed[id] = cam.targetTexture;
+                    bool isNew = !_bypassed.ContainsKey(id);
+                    _bypassed[id] = tex;
                     cam.targetTexture = null;
-                    n++;
+                    if (isNew)
+                        LoggerInstance.Msg($"buffer bypass: camera '{cam.name}' now draws to the screen " +
+                                           $"(had the {tex.width}x{tex.height} buffer), {_bypassed.Count} redirected");
                 }
-                // hide the RawImage canvas that stretches the buffer, or it would cover the screen
-                if (_bufferCanvas == null)
+
+                // Hide the RawImage canvas that stretches the buffer, and keep it hidden: the game
+                // re-enables it whenever it switches cameras.
+                if (_bufferCanvas == null && Time.unscaledTime >= _nextCanvasFind)
                 {
-                    try
-                    {
-                        foreach (var canvas in Resources.FindObjectsOfTypeAll<Canvas>())
-                        {
-                            if (canvas == null || canvas.name != "Canvas (Main RT)") continue;
-                            _bufferCanvas = canvas.gameObject;
-                            break;
-                        }
-                    }
-                    catch { }
-                    if (_bufferCanvas != null) _bufferCanvas.SetActive(false);
+                    _nextCanvasFind = Time.unscaledTime + 0.5f;
+                    _bufferCanvas = FindBufferCanvas();
                 }
+                if (_bufferCanvas != null)
+                {
+                    try { if (_bufferCanvas.activeSelf) _bufferCanvas.SetActive(false); }
+                    catch { _bufferCanvas = null; }
+                }
+
                 // Tell the game what surface it is really drawing into. Its aim maths converts the
                 // reticle position into buffer pixels using these constants, so leaving them at
                 // 854x480 while the camera renders full-screen puts the ray off by the ratio.
@@ -120,22 +117,78 @@ namespace TbcMenu
                     }
                     catch { _origRTW = 854; _origRTH = 480; }
                 }
-                try
+                if (General_Settings_CS.Render_Texture_Width != Screen.width ||
+                    General_Settings_CS.Render_Texture_Height != Screen.height)
                 {
-                    LoggerInstance.Msg($"RT constants now {General_Settings_CS.Render_Texture_Width}x{General_Settings_CS.Render_Texture_Height}, " +
-                                       $"screen {Screen.width}x{Screen.height}, saved originals {_origRTW}x{_origRTH}");
-                    if (General_Settings_CS.Render_Texture_Width != Screen.width)
+                    General_Settings_CS.Render_Texture_Width = Screen.width;
+                    General_Settings_CS.Render_Texture_Height = Screen.height;
+                    if (Time.unscaledTime >= _nextConstantsLog)
                     {
-                        General_Settings_CS.Render_Texture_Width = Screen.width;
-                        General_Settings_CS.Render_Texture_Height = Screen.height;
-                        LoggerInstance.Msg($"render buffer constants -> {Screen.width}x{Screen.height} (were {_origRTW}x{_origRTH})");
+                        _nextConstantsLog = Time.unscaledTime + 2f;
+                        LoggerInstance.Msg($"render buffer constants -> {Screen.width}x{Screen.height} " +
+                                           $"(originals {_origRTW}x{_origRTH})");
                     }
                 }
-                catch (Exception e) { LoggerInstance.Warning("buffer constants: " + e.Message); }
-
-                if (n > 0) LoggerInstance.Msg($"buffer bypass on: {n} camera(s) render to the screen, buffer canvas hidden");
             }
             catch (Exception e) { LoggerInstance.Warning("buffer bypass: " + e.Message); }
+        }
+
+        private void RestoreBufferBypass()
+        {
+            if (_bypassed.Count == 0 && _bufferCanvas == null && _origRTW < 0) return;   // nothing to undo
+            try
+            {
+                // Camera.allCameras only lists enabled cameras, and the gun sight / map cameras are
+                // inactive most of the time, so search every camera before giving the buffer back.
+                foreach (var cam in Resources.FindObjectsOfTypeAll<Camera>())
+                {
+                    if (cam == null) continue;
+                    if (!_bypassed.TryGetValue(cam.GetInstanceID(), out var tex) || tex == null) continue;
+                    if (cam.targetTexture != null) continue;   // the game has already given it one
+                    cam.targetTexture = tex;
+                }
+                _bypassed.Clear();
+                _bufferTex = null;
+                if (_bufferCanvas != null)
+                {
+                    try { _bufferCanvas.SetActive(true); } catch { }
+                    _bufferCanvas = null;
+                }
+                if (_origRTW > 0)
+                {
+                    try
+                    {
+                        General_Settings_CS.Render_Texture_Width = _origRTW;
+                        General_Settings_CS.Render_Texture_Height = _origRTH;
+                    }
+                    catch { }
+                }
+                LoggerInstance.Msg($"buffer bypass off - the game's buffer is back at {_origRTW}x{_origRTH}");
+            }
+            catch (Exception e) { LoggerInstance.Warning("buffer bypass off: " + e.Message); }
+        }
+
+        // A scene change replaces the buffer, the cameras and the canvas.
+        private void ResetBufferTracking()
+        {
+            _bypassed.Clear();
+            _bufferTex = null;
+            _bufferCanvas = null;
+            _nextCanvasFind = 0f;
+        }
+
+        private GameObject FindBufferCanvas()
+        {
+            try
+            {
+                foreach (var canvas in Resources.FindObjectsOfTypeAll<Canvas>())
+                {
+                    if (canvas == null || canvas.name != "Canvas (Main RT)") continue;
+                    return canvas.gameObject;
+                }
+            }
+            catch { }
+            return null;
         }
 
         private RenderTexture FindBuffer()

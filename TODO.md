@@ -1,5 +1,30 @@
 # TODO
 
+## Done: the bypass in every camera mode, and a mission played to completion (1.7.1)
+
+Two handover items were open; both are now measured rather than assumed.
+
+**The gun sight and the map were broken by the bypass.** With `bypass_buffer` on, 1.7.0 left
+`Gun_Camera` and `Camera (Map)` rendering into the 854x480 buffer whose canvas the bypass hides,
+so the gun sight showed the dark scope disc and its reticle with no world behind it, and the map
+was blank. Both cameras are inactive - hence absent from `Camera.allCameras` - until their mode
+is switched on, so a redirect applied once at scene load never saw them. 1.7.1 maintains the
+redirect every frame and resets its tracking per scene. Verified in game: both views render at
+native resolution, the map's markers sit on their tanks, and the log names each camera as it is
+caught (`camera 'Gun_Camera' now draws to the screen (had the 854x480 buffer)`).
+
+**Mission complete has been played through**, twice. The second run, from the log and the game's
+own save data: `TBC_rolling_ground`, `Clear_Count 2`, `Clear_Time 69.87 s`, `Kills 1`,
+`Hit_Ratio 100.0`, `Hits_Taken 0`, `Total_Score 2100`, the `99_Result` scene and a clean return
+to the mission list. The kill was a single gun-sight shot at **247 m** (hit angle 39.1 deg,
+`Penetration 60.6/30.0 mm`), which doubles as proof of the aiming correction: a scale error in
+`Render_Texture_Width/Height` is metres wide at that range.
+
+**Still open:** in a *briefing* scene the buffer is found through the full-screen RawImage, and
+the minimap's 256x256 RenderTexture can be picked instead (log: `camera 'Camera (Map)' ... (had
+the 256x256 buffer)`). Battle scenes are unaffected. Fix: identify the buffer as the RenderTexture
+the world cameras render into, never one under about 512 px.
+
 ## Done: per-tank vehicle overrides (1.6.0)
 
 The Vehicle tab now takes **absolute** per-tank values, keyed by `Tank_Prop_SO.Tank_Name`
@@ -104,6 +129,9 @@ Custom scenarios can be built entirely headlessly with the editor's own Python m
 
 ## Backlog
 
+- **Briefing-scene buffer identification** - see the 1.7.1 section above: `FindBuffer()` should
+  take the RenderTexture the world cameras render into and refuse anything below ~512 px, so the
+  256x256 minimap can never be mistaken for the view buffer.
 - **Restore `cost_scale`** - scale `Tank_Prop_SO.Tank_Tier_Costs` so unlocks are cheaper. Existed in the
   old standalone tuner, lost in the consolidation.
 - **Restore `allow_manual_respawn`** - one-line toggle on

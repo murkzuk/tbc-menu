@@ -25,8 +25,9 @@ filter": the art itself is full resolution (2048x2048 albedos), and none of it i
 game's Settings menu.
 
 This mod removes the filter and makes the pipeline adjustable at runtime - including, since 1.7,
-drawing the 3D view at native resolution instead of into that buffer. The background, the measured
-numbers and the traps are in [docs/graphics-notes.md](docs/graphics-notes.md).
+drawing the 3D view at native resolution instead of into that buffer, in every camera mode:
+third person, gun sight and map (the last two since 1.7.1). The background, the measured numbers
+and the traps are in [docs/graphics-notes.md](docs/graphics-notes.md).
 
 ## Requirements
 
@@ -92,6 +93,14 @@ is drawn has to be mirrored in those two fields, or the aim goes wrong. Measured
 So the bypass sets those constants and restores them when switched off, `internal_scale` defaults
 to 0 (its row is labelled "breaks aim"), and for a safe but softer improvement use
 **Quality -> Render scale**. MSAA, anisotropy, shadows and the post effects are safe either way.
+
+There is a second half to it. The buffer is shared: `Gun_Camera` and `Camera (Map)` are only
+created when you switch into the gun sight or the map, so they have to be redirected as they
+appear rather than once at scene load. 1.7.0 redirected once and both views came up blank - the
+dark scope disc with a reticle over it, and an empty map. Since 1.7.1 the redirect is maintained
+every frame, and both views draw at native resolution. Measured proof that the aim survives it:
+a gun-sight kill at **247 m** with one shot, `Hit_Ratio 100.0` and `Penetration 60.6/30.0 mm` on
+the game's own results screen.
 
 ## Commander view (F6)
 
@@ -205,9 +214,11 @@ See [TODO.md](TODO.md) for the backlog and the measured game-vs-real-life data.
 
 - Unity stripped the IMGUI module from this build, so the UI is uGUI with manual hit-testing.
   It is not resizable or scrollable; it is a panel with fixed rows.
-- **Render direct to screen is newer than the rest.** Third person, driving, the HUD, messages and
-  the gun sight were checked; the map camera and unusual camera states have had less testing. If
-  something looks wrong, turn the toggle off - it takes effect immediately.
+- **Render direct to screen covers all three camera modes** (third person, gun sight, map) since
+  1.7.1, and the aiming correction is verified by measurement, not by eye. The one place it can
+  still pick the wrong texture is a briefing screen, which carries a second 256x256 minimap
+  buffer; battle scenes are unaffected. If something looks wrong, turn the toggle off - it takes
+  effect immediately.
 - The bypass hides the canvas that displays the buffer. Anything the game draws into that buffer
   other than the 3D view will not appear.
 - Effects are added to the scene's volume profile at runtime. If the game ever ships its own

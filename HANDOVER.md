@@ -1,8 +1,8 @@
 # Handover
 
-Everything needed to pick this up cold. Mod version **1.7.0** (native-resolution rendering),
-last commit `989143a`. Two installed custom scenarios. Read this, then `README.md`, `TODO.md`,
-`docs/vehicle-model.md` and `docs/terrain-and-scenarios.md`.
+Everything needed to pick this up cold. Mod version **1.7.1** (native-resolution rendering in
+every camera mode - the 1.7.1 commit, see `git log`). Two installed custom scenarios. Read this,
+then `README.md`, `TODO.md`, `docs/vehicle-model.md` and `docs/terrain-and-scenarios.md`.
 
 ## The two repos
 
@@ -92,7 +92,9 @@ Two missions are on the game's **Custom Missions** page (06/06):
 
 `TBC rolling ground` content: player T-34/76, one hostile Pz. III N on a four-waypoint patrol, a
 timer message at 8 s, mission complete when that tank dies. Verified in game: the message fires, the
-AI drives its route (11.8 m/s), the mission completes. Vertical relief ~4.6 m, mean slope ~1.2 deg.
+AI drives its route (11.8 m/s), and the mission has now been **played through to the results screen
+twice** - `Clear_Count 2`, best `69.87 s`, 1 kill, `Hit_Ratio 100.0`, no damage taken, `Total_Score
+2100`, then a clean return to the mission list. Vertical relief ~4.6 m, mean slope ~1.2 deg.
 
 Both are backed up by the editor in `...\backups\tank_battle_classic-2e580b51\scenarios\<scene_id>\`
 (`battle.level`, `terrain.npz`, `meta.json`, `mission.json`), so a game update cannot destroy them.
@@ -172,26 +174,42 @@ drive flags) and `MelonLoader\Latest.log` - are usually faster than eyeballing a
 
 ## Where it stands right now
 
-- Repo clean, pushed, MIT, credited to murkzuk with the DeepSeek build note. `dist\TBC_Menu-1.7.0.zip`.
-- Installed: `<game>\Mods\TBC_Menu.dll` 1.7.0, hash-identical to the build. `version.dll` is back
+- Repo clean, pushed, MIT, credited to murkzuk with the DeepSeek build note. `dist\TBC_Menu-1.7.1.zip`.
+- Installed: `<game>\Mods\TBC_Menu.dll` 1.7.1 (`D35F9AA3...`), hash-identical to the build. `version.dll` is back
   in place (MelonLoader active).
 - User config: `Render direct to screen` on, `internal_scale` 0, MSAA 8, render scale 2, shadow
   distance 400, seven per-tank vehicle entries, `player_only: true`.
 - Game and mission editor were both closed at handover; nothing is left running.
-- `save.json` is untouched (a pre-test backup was taken and removed; nothing wrote to it).
+- `save.json` carries the two verified clears (`Mission_Cleared` 6, 12 kills, 12200 points); backups
+  taken before the play tests are in `scratch\save_before_play*.json`.
+
+## Verified since the previous handover (1.7.1)
+
+Both items that were open here have been measured and closed.
+
+- **The bypass now covers every camera mode.** With `bypass_buffer` on, 1.7.0 left `Gun_Camera`
+  (gun sight) and `Camera (Map)` rendering into the 854x480 buffer whose canvas the bypass hides -
+  a dark scope with a reticle and no world, and a blank map. Both cameras only exist while their
+  view is switched on, so an inactive camera is absent from `Camera.allCameras` and a one-shot
+  redirect missed them. 1.7.1 maintains the redirect every frame and resets its tracking per
+  scene; the log names each camera as it is caught. Verified in game: both views at native
+  resolution, map markers on their tanks.
+- **Mission complete has been played through**, twice - see the scenario section above. The kill
+  was a single gun-sight shot at 247 m, which is also the proof that the aiming correction (the
+  `Render_Texture_Width/Height` trap) holds: `Hit_Ratio 100.0`, `Penetration 60.6/30.0 mm`.
 
 ## Open items, in the order they matter
 
-1. **Verify the bypass in the less-travelled camera states** - gun sight and map camera with
-   `bypass_buffer` on. Third person, driving, HUD, messages and the gun sight were checked; the map
-   camera was not. If something is off, the toggle is live in the Resolution tab.
-2. **Mission complete has never been played through** - the trigger is wired to the enemy's Transform
-   (correct form, copied from the stock mission) but the tank was never actually killed.
-3. **Terrain: iterate on the half-height version** - it is at ~1.2 deg mean slope now; if it reads too
+1. **Briefing-scene buffer identification** - while a briefing screen is up, `FindBuffer()` can pick
+   the 256x256 minimap RenderTexture instead of the 854x480 view buffer (1.7.1 log:
+   `camera 'Camera (Map)' ... (had the 256x256 buffer)`). Battle scenes are unaffected. The fix is
+   to identify the buffer as the RenderTexture the world cameras render into and refuse anything
+   under ~512 px.
+2. **Terrain: iterate on the half-height version** - it is at ~1.2 deg mean slope now; if it reads too
    flat, the way to keep the height while restoring hill character is shorter wavelengths (ridged
    noise), not more amplitude.
-4. **Torque on slopes** is still unmeasured (`torque_scale` only shows on gradients).
-5. **Backlog**: `cost_scale` and `allow_manual_respawn` (lost in an earlier consolidation), the two
+3. **Torque on slopes** is still unmeasured (`torque_scale` only shows on gradients).
+4. **Backlog**: `cost_scale` and `allow_manual_respawn` (lost in an earlier consolidation), the two
    AI knobs that exist in config but have no menu row, AI deceleration (dumps show 0.01 s, i.e. AI
    tanks stop instantly).
 

@@ -13,7 +13,7 @@ using UnityEngine.UI;
 using Il2CppChobiAssets.PTM;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 
-[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.7.0", "murkzuk")]
+[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.7.1", "murkzuk")]
 [assembly: MelonAdditionalCredits("Built by DeepSeek at murkzuk's request")]
 [assembly: MelonGame(null, null)]
 
@@ -55,11 +55,13 @@ namespace TbcMenu
         public override void OnLateUpdate()
         {
             UpdateCommanderView();
+            MaintainBufferBypass();   // the gun sight and map cameras only appear when their mode is on
         }
 
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
             OnSceneChangedCommander(); // scene objects are gone; the request survives if it was open
+            ResetBufferTracking();     // new scene, new buffer, new cameras
             ResetVehicleSnaps();       // new tanks, new first-seen values
             ResetDiag();               // fresh three dumps for each scene
             if (!_cfg.enabled) return;
