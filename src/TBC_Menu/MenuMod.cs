@@ -13,7 +13,7 @@ using UnityEngine.UI;
 using Il2CppChobiAssets.PTM;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 
-[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.4.1", "murkzuk")]
+[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.5.0", "murkzuk")]
 [assembly: MelonAdditionalCredits("Built by DeepSeek at murkzuk's request")]
 [assembly: MelonGame(null, null)]
 
@@ -87,6 +87,7 @@ namespace TbcMenu
             ApplyVisuals("tick");
             ApplyEffects("tick");
             ApplyTuningRuntime("tick");
+            ApplyVehicleOverrides();
             SyncBuffer("tick");
         }
 

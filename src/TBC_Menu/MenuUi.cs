@@ -36,7 +36,7 @@ namespace TbcMenu
             public Func<string> value;
         }
 
-        private static readonly string[] TabNames = { "Resolution", "Visuals", "Quality", "Effects", "Tuning" };
+        private static readonly string[] TabNames = { "Resolution", "Visuals", "Quality", "Effects", "Vehicle", "Tuning" };
         private const float PanelX = 40f, PanelY = 50f, PanelW = 780f, RowH = 34f;
         private const float LabelX = 56f, LabelW = 520f, ValueX = 600f, ValueW = 200f;
 
@@ -129,6 +129,7 @@ namespace TbcMenu
             else if (_tab == 1) total += RowH * 20f;
             else if (_tab == 2) total += RowH * 6f;
             else if (_tab == 3) total += RowH * 7f;
+            else if (_tab == 4) total += RowH * 9f;
             else total += RowH * 16f;
             total += RowH * 4f;
             MakeImage(PanelX, PanelY, PanelW, total, new Color(0.02f, 0.02f, 0.05f, 0.95f));
@@ -138,13 +139,13 @@ namespace TbcMenu
             for (int i = 0; i < TabNames.Length; i++)
             {
                 int captured = i;
-                var tx = MakeText("tab" + i, LabelX + i * 146f, y, 142f, RowH, 20,
+                var tx = MakeText("tab" + i, LabelX + i * 124f, y, 118f, RowH, 20,
                     _tab == i ? new Color(1f, 0.85f, 0.2f) : new Color(0.7f, 0.78f, 0.9f), TextAnchor.MiddleLeft);
                 tx.text = (_tab == i ? "> " : "   ") + TabNames[i];
                 _rows.Add(new Row
                 {
                     labelText = tx,
-                    rect = new Rect(LabelX + i * 146f, y, 142f, RowH),
+                    rect = new Rect(LabelX + i * 124f, y, 118f, RowH),
                     onClick = d => { _tab = captured; RebuildMenu(); },
                 });
             }
@@ -154,6 +155,7 @@ namespace TbcMenu
             else if (_tab == 1) BuildVisualRows(ref y);
             else if (_tab == 2) BuildQualityRows(ref y);
             else if (_tab == 3) BuildEffectRows(ref y);
+            else if (_tab == 4) BuildVehicleRows(ref y);
             else BuildTuningRows(ref y);
 
             y += 8f;
@@ -324,6 +326,19 @@ namespace TbcMenu
             AddFloatRow(ref y, "Exposure", () => e.exposure, x => { e.exposure = x; ApplyEffects("menu"); }, -2f, 2f, 0.1f, "F2");
             AddFloatRow(ref y, "Contrast", () => e.contrast, x => { e.contrast = x; ApplyEffects("menu"); }, -50f, 50f, 5f, "F0");
             AddFloatRow(ref y, "Saturation", () => e.saturation, x => { e.saturation = x; ApplyEffects("menu"); }, -50f, 50f, 5f, "F0");
+        }
+
+        private void BuildVehicleRows(ref float y)
+        {
+            var v = _cfg.vehicle;
+            AddToggleRow(ref y, "Enable vehicle overrides", () => v.enabled, b => { v.enabled = b; _vehSnaps.Clear(); ApplyVehicleOverrides(); });
+            AddFloatRow(ref y, "Speed scale", () => v.speed_scale, x => { v.speed_scale = x; ApplyVehicleOverrides(); }, 0.05f, 3f, 0.05f, "F2");
+            AddFloatRow(ref y, "Torque scale", () => v.torque_scale, x => { v.torque_scale = x; ApplyVehicleOverrides(); }, 0.05f, 3f, 0.05f, "F2");
+            AddFloatRow(ref y, "Traverse scale", () => v.traverse_scale, x => { v.traverse_scale = x; ApplyVehicleOverrides(); }, 0.05f, 3f, 0.05f, "F2");
+            AddToggleRow(ref y, "Player tank only", () => v.player_only, b => { v.player_only = b; _vehSnaps.Clear(); ApplyVehicleOverrides(); });
+            AddRow(ref y, "Dump vehicle values", () => "write json", d => DumpVehicles(), null, false);
+            AddRow(ref y, "applies to", () => v.player_only ? "player only" : "every tank", null, new Color(0.6f, 0.65f, 0.75f));
+            AddRow(ref y, "note", () => "these are the real drive values", null, new Color(0.6f, 0.65f, 0.75f));
         }
 
         private void BuildTuningRows(ref float y)

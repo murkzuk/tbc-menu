@@ -51,6 +51,15 @@ namespace TbcMenu
         public int points = 0;
     }
 
+    public class VehicleCfg
+    {
+        public bool enabled = false;
+        public float speed_scale = 1f;     // multiplies Drive_Control_CS.Max_Speed
+        public float torque_scale = 1f;    // multiplies Drive_Control_CS.Torque
+        public float traverse_scale = 1f;  // multiplies turret traverse rates
+        public bool player_only = true;    // leave AI tanks alone
+    }
+
     public class QualityCfg
     {
         public int msaa = 1;                    // 1, 2, 4, 8
@@ -105,6 +114,7 @@ namespace TbcMenu
         public QualityCfg quality = new QualityCfg();
         public EffectsCfg effects = new EffectsCfg();
         public TuningCfg tuning = new TuningCfg();
+        public VehicleCfg vehicle = new VehicleCfg();
         public CameraCfg camera = new CameraCfg();
     }
 

@@ -102,6 +102,8 @@ break it. If the fields move, rebuild against the new interop assemblies.
 
 ## Known limitations
 
+See [TODO.md](TODO.md) for the backlog and the measured game-vs-real-life data.
+
 - Unity stripped the IMGUI module from this build, so the UI is uGUI with manual hit-testing.
   It is not resizable or scrollable; it is a panel with fixed rows.
 - Effects are added to the scene's volume profile at runtime. If the game ever ships its own
