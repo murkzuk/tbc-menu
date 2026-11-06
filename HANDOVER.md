@@ -1,9 +1,9 @@
 # Handover
 
-Everything needed to pick this up cold. Mod version **1.7.3** (native-resolution rendering in every
-camera mode, the menu and buffer clean-up, and a Tuning tab that undoes itself - the 1.7.3 commit,
-see `git log`). Two installed custom scenarios. Read this, then `README.md`, `TODO.md`,
-`docs/vehicle-model.md` and `docs/terrain-and-scenarios.md`.
+Everything needed to pick this up cold. Mod version **1.7.4** (native-resolution rendering in every
+camera mode, the menu and buffer clean-up, a Tuning tab that undoes itself, and the four
+vehicle-override fixes - the 1.7.4 commit, see `git log`). Two installed custom scenarios. Read
+this, then `README.md`, `TODO.md`, `docs/vehicle-model.md` and `docs/terrain-and-scenarios.md`.
 
 ## The two repos
 
@@ -175,8 +175,8 @@ drive flags) and `MelonLoader\Latest.log` - are usually faster than eyeballing a
 
 ## Where it stands right now
 
-- Repo clean, pushed, MIT, credited to murkzuk with the DeepSeek build note. `dist\TBC_Menu-1.7.3.zip`.
-- Installed: `<game>\Mods\TBC_Menu.dll` 1.7.3 (`84B1C27D...`), hash-identical to the build. `version.dll` is back
+- Repo clean, pushed, MIT, credited to murkzuk with the DeepSeek build note. `dist\TBC_Menu-1.7.4.zip`.
+- Installed: `<game>\Mods\TBC_Menu.dll` 1.7.4 (`6B56D5D8...`), hash-identical to the build. `version.dll` is back
   in place (MelonLoader active).
 - User config: `Render direct to screen` on, `internal_scale` 0, MSAA 8, render scale 2, shadow
   distance 400, seven per-tank vehicle entries, `player_only: true`.
@@ -189,6 +189,15 @@ drive flags) and `MelonLoader\Latest.log` - are usually faster than eyeballing a
 Both items that were open at the 1.7.0 handover have been measured and closed, and 1.7.2 closed the
 first of the follow-ups:
 
+- **1.7.4 - the vehicle overrides are correct now.** Torque scales `defaultTorque` instead of the
+  slope-limited `Torque` (dump evidence: 2799.9 vs 3000.0); `decel_time` refreshes its own cached
+  `deceleRate` and turns the ramp on, instead of being inert unless `accel_time` was also set;
+  *Clear this tank* puts the game's values back (measured: `maxSpeed 11.200 / defaultTorque 3000 /
+  accel 8.00 / deceleRate 0.500 / syncSpeedRate on`); *Load realism table* updates the three fields
+  in place so `elevation`/`torque_scale`/`decel_time` survive. The dump also reports
+  `acceleRate`/`deceleRate` now. **And the tank keys are settled offline**: the editor's
+  `tank_catalogue()` shows 38 `Tank_Prop_SO` assets = 19 vehicles x (player + AI), AI variants share
+  the name, and every key in `RealismTable` was already right.
 - **1.7.3 - the Tuning tab is reversible.** Unticking it now restores the six multiplier arrays, the
   live AI settings and the passive flag, and the multiplier indices it may have overwritten; before,
   all of it latched (the arrays especially, since they are copied into every vehicle at spawn).
@@ -220,11 +229,9 @@ first of the follow-ups:
 1. **Terrain: iterate on the half-height version** - it is at ~1.2 deg mean slope now; if it reads too
    flat, the way to keep the height while restoring hill character is shorter wavelengths (ridged
    noise), not more amplitude.
-2. **Vehicle overrides have four known defects** - torque is scaled from the slope-limited `Torque`
-   instead of `defaultTorque` (the dump shows `2799.9` vs `3000.0`), `deceleRate` is only refreshed
-   when `accel_time` is set, *Clear this tank* leaves the acceleration ramp behind, and *Load realism
-   table* replaces whole entries so `elevation`/`torque_scale`/`decel_time` are lost. Also open: 12 of
-   the 19 tank keys are still guesses - one dump session settles it.
+2. **The 12 unmeasured tanks still only have estimated performance.** Their `Tank_Name` keys are
+   verified (see 1.7.4 above) and the entries therefore work; what is guessed is `max_speed`,
+   `traverse` and `accel_time` for everything except the six measured tanks.
 3. **Non-16:9 aiming** - `Fixed_Aspect_Camera_CS` letterboxes to 1.7778, so the aim constants may
    need the camera rect rather than the screen size; untested at 21:9 and 4:3.
 4. **Torque on slopes** is still unmeasured (`torque_scale` only shows on gradients).

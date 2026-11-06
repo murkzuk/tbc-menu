@@ -1,5 +1,28 @@
 # TODO
 
+## Done: the four vehicle-override defects, and the tank keys settled (1.7.4)
+
+Each defect was verified by dump, not by reading the code:
+
+| defect | before | after | how it was measured |
+|---|---|---|---|
+| torque scaled from `Torque` | `snap.Torque` is a **slope-limited** reading (dump: 2799.9 against `defaultTorque` 3000.0), so a 1.2 scale wrote 3359.9 | base is `defaultTorque`: 3000 x 1.2 = **3600** | log `torque 3000 -> 3600`, dump `defaultTorque: 3600.0` |
+| `decel_time` inert on its own | `deceleRate` was refreshed only inside the `accel_time` branch | either time turns the ramp on and refreshes its own cached rate | dump with accel 24 s / decel 4 s: `acceleRate 0.04167` (1/24), `deceleRate 0.25000` (1/4) |
+| *Clear this tank* left the ramp behind | it only deleted the config entry, leaving flags, rates and the wheel cap | restores that tank's snapshot first, then re-applies the global scales | dump after clearing: `maxSpeed 11.200`, `defaultTorque 3000.0`, `accel 8.00`, `decel 2.00`, `acceleRate 0.125`, `deceleRate 0.500`, `syncSpeedRate on`, wheel cap back to 24.89 |
+| *Load realism table* replaced whole entries | `elevation`, `torque_scale` and `decel_time` set on those tanks were lost | updates the three fields in place | after pressing it, the menu still showed `torque scale 1.20` and `decel time s 4.0` for the T-34/76 |
+
+**Tank keys: settled, offline, without spawning anything.** `scene_model.tank_catalogue()` (from
+the mission editor's own modules) reads every `Tank_Prop_SO` in the game's asset files: **38 assets
+= 19 vehicles x (player + AI)**, and each AI variant carries the **same** `Tank_Name` as the player
+one. The 19 names are BT-42, BT-7, Hetzer, IS-2, Jagdpanther, KV-1, KV-2, Pakwagen, Panther G,
+Pz. III J, Pz. III N, Pz. IV G, Sd.Kfz.251, StuG III, T-34/76, T-34/85, Tiger I, Tiger I (L),
+Tiger II - which is exactly what `RealismTable` already used. So no key in the table was ever a
+guess; the "unconfirmed" column below was wrong. What is still estimated is the *performance* of
+the 12 tanks that have not been measured in game, not their keys.
+
+New instrument: the drive rows of `TBC_Vehicles.json` now include `acceleRate` and `deceleRate`,
+the cached private rates that actually drive the ramp.
+
 ## Done: the Tuning tab undoes itself (1.7.3)
 
 Unticking **Enable tuning** used to leave three one-way doors behind, because
@@ -171,8 +194,8 @@ The scenario editor's Kursk pack declares the game's full playable roster (`meta
 | `Hetzer` | `Hetzer` | **measured** |
 | `Jagdpanther` | `Jagdpanther` | **measured** |
 | `Panzer-III_N` | `Pz. III N` | **measured** |
-| `T-34_85`, `Panther-G`, `Panzer-III_J`, `Panzer-IV`, `StuG-III_Late`, `KV-1`, `KV-2`, `IS-2`, `Sdkfz251`, `Sdkfz251_Pakwagen`, `BT-7`, `BT-42` | guess | estimates in the table, **key unconfirmed** |
-| `Tiger-I_Late` | `Tiger I`? | probably the same `Tank_Name` as `Tiger-I`, so one entry covers both |
+| `T-34_85` -> `T-34/85`, `Panther-G` -> `Panther G`, `Panzer-III_J` -> `Pz. III J`, `Panzer-IV` -> `Pz. IV G`, `StuG-III_Late` -> `StuG III`, `KV-1`, `KV-2`, `IS-2`, `Sdkfz251` -> `Sd.Kfz.251`, `Sdkfz251_Pakwagen` -> `Pakwagen`, `BT-7`, `BT-42` | **key verified** (catalogue scan) | estimate only - the values are historical, the keys are right |
+| `Tiger-I_Late` | `Tiger I (L)` | its own `Tank_Name`; both Tiger entries exist and cover it |
 
 `BT-7` was confirmed from a live dump; every other guess needs one dump taken in a mission that
 spawns that vehicle (`F7 -> Vehicle -> Dump vehicle values`, then read `tankTypes` and the per-drive

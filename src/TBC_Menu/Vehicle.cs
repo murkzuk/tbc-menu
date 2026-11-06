@@ -55,6 +55,12 @@ namespace TbcMenu
         // ---------------------------------------------------------------- public bits
 
         // Writes every spawned vehicle's real drive and traverse values to UserData/TBC_Vehicles.json
+        // Cached private rates are what actually drive the ramp, so the dump has to show them.
+        private static string RateOf(Func<float> get)
+        {
+            try { return get().ToString("F5"); } catch { return "?"; }
+        }
+
         private void DumpVehicles()
         {
             try
@@ -87,6 +93,8 @@ namespace TbcMenu
                                   ", mass_kg: " + mass.ToString("F0") +
                                   ", accel_s: " + drive.Acceleration_Time.ToString("F2") +
                                   ", decel_s: " + drive.Deceleration_Time.ToString("F2") +
+                                  ", acceleRate: " + RateOf(() => drive.acceleRate) +
+                                  ", deceleRate: " + RateOf(() => drive.deceleRate) +
                                   ", speedRate: " + drive.Speed_Rate.ToString("F3") +
                                   ", velocity_mps: " + drive.Current_Velocity.ToString("F3") +
                                   ", posX: " + pos.x.ToString("F2") + ", posZ: " + pos.z.ToString("F2") +
@@ -309,7 +317,11 @@ namespace TbcMenu
 
             // ---- speed + torque ------------------------------------------------
             float targetSpeed = Mathf.Clamp(absSpeed ?? snap.MaxSpeed * speedScale, 0.2f, 60f);
-            float targetTorque = Mathf.Max(1f, snap.Torque * torqueScale);
+            // Scale defaultTorque, not Torque: the game recomputes Torque every frame as
+            // defaultTorque * (1 - slope factor), so the snapshot of Torque is a slope-limited
+            // reading (a T-34/76 dump shows torque 2799.9 against defaultTorque 3000.0) and
+            // scaling it would bake that error in.
+            float targetTorque = Mathf.Max(1f, snap.DefaultTorque * torqueScale);
 
             // Acceleration is not torque-limited in this game: the drive ramps Speed_Rate to 1.0
             // over Acceleration_Time and the wheel cap follows it, so the ramp - not the torque -
@@ -325,20 +337,25 @@ namespace TbcMenu
             drive.Acceleration_Time = targetAccel;
             drive.Deceleration_Time = targetDecel;
 
-            if (e != null && e.accel_time.HasValue)
+            // Three flags have to line up before either time does anything:
+            //   Acceleration_Flag  - otherwise the input is applied instantly;
+            //   Sync_Speed_Rate    - otherwise Speed_Rate is continuously re-synced to the
+            //                        measured speed, which overrides the ramp entirely;
+            //   acceleRate/deceleRate - private fields cached from the times in Initialize(),
+            //                        so writing a time alone is not enough.
+            // decel_time used to be refreshed only inside the accel_time branch, which made it
+            // inert on its own - a value the user could set that did nothing. Either time being
+            // set now turns the ramp on and refreshes its own cached rate.
+            bool wantAccelRamp = e != null && e.accel_time.HasValue;
+            bool wantDecelRamp = e != null && e.decel_time.HasValue;
+            if (wantAccelRamp || wantDecelRamp)
             {
-                // Three flags have to line up before Acceleration_Time does anything:
-                //   Acceleration_Flag  - otherwise the input is applied instantly;
-                //   Sync_Speed_Rate    - otherwise Speed_Rate is continuously re-synced to the
-                //                        measured speed, which overrides the ramp entirely;
-                //   acceleRate         - a private field cached from Acceleration_Time in
-                //                        Initialize(), so writing the time alone is not enough.
                 drive.Acceleration_Flag = true;
                 drive.Sync_Speed_Rate = false;
                 try
                 {
-                    drive.acceleRate = 1f / targetAccel;
-                    drive.deceleRate = 1f / targetDecel;
+                    if (wantAccelRamp) drive.acceleRate = 1f / targetAccel;
+                    if (wantDecelRamp) drive.deceleRate = 1f / targetDecel;
                 }
                 catch { }
             }
@@ -359,7 +376,7 @@ namespace TbcMenu
             if (speedChanged || torqueChanged)
             {
                 LoggerInstance.Msg($"vehicle '{name}': speed {snap.MaxSpeed:F2} -> {targetSpeed:F2} m/s " +
-                                   $"({targetSpeed * 3.6f:F0} km/h), torque {snap.Torque:F0} -> {targetTorque:F0}" +
+                                   $"({targetSpeed * 3.6f:F0} km/h), torque {snap.DefaultTorque:F0} -> {targetTorque:F0}" +
                                    $", accel {snap.AccelTime:F1} -> {targetAccel:F1} s" +
                                    (speedChanged ? $", wheelCap {WheelCapOf(snap):F2}" : ""));
             }
@@ -438,28 +455,36 @@ namespace TbcMenu
             return v.per_tank.TryGetValue(tankName, out var e) ? e : null;
         }
 
-        // Puts back what the game had, so turning the tab off is not a one-way door.
+        // Puts back what the game had for one spawned tank. Used both when the whole tab is switched
+        // off and by "clear this tank", which used to only delete the config entry and leave the
+        // acceleration ramp, the flags and the cached rates behind.
+        private void RestoreTankOriginals(Drive_Control_CS drive)
+        {
+            if (drive == null) return;
+            if (!_driveSnaps.TryGetValue(drive.GetInstanceID(), out var snap) || snap == null) return;
+
+            drive.Max_Speed = snap.MaxSpeed;
+            drive.Torque = snap.Torque;
+            drive.Acceleration_Time = snap.AccelTime;
+            drive.Deceleration_Time = snap.DecelTime;
+            drive.Acceleration_Flag = snap.AccelFlag;
+            drive.Sync_Speed_Rate = snap.SyncSpeedRate;
+            try { drive.acceleRate = snap.AcceleRate; drive.deceleRate = snap.DeceleRate; } catch { }
+            try { drive.defaultTorque = snap.DefaultTorque; } catch { }
+
+            snap.AppliedSpeed = snap.MaxSpeed;
+            snap.AppliedTorque = snap.DefaultTorque;
+            foreach (var wp in snap.Wheels) { if (wp == null) continue; try { wp.Initialize(); } catch { } }
+        }
+
+        // Puts back what the game had for every spawned tank, so turning the tab off is not a
+        // one-way door.
         private void RestoreVehicleOriginals()
         {
             try
             {
                 foreach (var drive in UnityEngine.Object.FindObjectsOfType<Drive_Control_CS>())
-                {
-                    if (drive == null) continue;
-                    if (!_driveSnaps.TryGetValue(drive.GetInstanceID(), out var snap) || snap == null) continue;
-
-                    drive.Max_Speed = snap.MaxSpeed;
-                    drive.Torque = snap.Torque;
-                    drive.Acceleration_Time = snap.AccelTime;
-                    drive.Deceleration_Time = snap.DecelTime;
-                    drive.Acceleration_Flag = snap.AccelFlag;
-                    drive.Sync_Speed_Rate = snap.SyncSpeedRate;
-                    try { drive.acceleRate = snap.AcceleRate; drive.deceleRate = snap.DeceleRate; } catch { }
-                    try { drive.defaultTorque = snap.DefaultTorque; } catch { }
-
-                    snap.AppliedSpeed = snap.MaxSpeed;
-                    foreach (var wp in snap.Wheels) { if (wp == null) continue; try { wp.Initialize(); } catch { } }
-                }
+                    RestoreTankOriginals(drive);
 
                 foreach (var tur in UnityEngine.Object.FindObjectsOfType<Turret_Horizontal_CS>())
                 {
@@ -615,15 +640,17 @@ namespace TbcMenu
 
         // ---------------------------------------------------------------- realism preset
 
-        // Road top speed (m/s), turret traverse (deg/s) and the time to reach that speed in
-        // seconds. accel_time is the column that matters: measured in game, halving or doubling
-        // Torque changes nothing on flat ground, because the drive ramps Speed_Rate over
-        // Acceleration_Time and the wheels follow that ramp. Torque is left at the game value.
-        // Road top speed (m/s), turret traverse (deg/s), time from standstill to full speed (s).
-        // The first six were measured in game (dumps + speedometer). The rest are historical
-        // estimates. Every key below is an exact Tank_Prop_SO.Tank_Name, taken from the game's
-        // tank catalogue (20 entries: 19 vehicles plus "Tiger I (L)", which is the late build and
-        // has its own name). AI variants share the same Tank_Name, so one entry covers both.
+        // Road top speed (m/s), turret traverse (deg/s) and time from standstill to full speed (s).
+        // accel_time is the column that matters: measured in game, halving or doubling Torque
+        // changes nothing on flat ground, because the drive ramps Speed_Rate over
+        // Acceleration_Time and the wheels follow that ramp. Torque stays at the game value here.
+        //
+        // Every key is an exact Tank_Prop_SO.Tank_Name, verified against the whole catalogue rather
+        // than guessed: the game ships 38 Tank_Prop_SO assets - 19 vehicles, each with a player and
+        // an AI variant - and the AI variant carries the same Tank_Name, so one entry covers both.
+        // "Tiger I" and "Tiger I (L)" are deliberately separate: same vehicle, own Tank_Name.
+        // Speeds and traverse rates are historical figures; the six marked "measured" are the
+        // in-game dumps. Everything else is an estimate.
         private static readonly (string name, float mps, float traverse, float accel)[] RealismTable =
         {
             // measured in game
@@ -653,14 +680,18 @@ namespace TbcMenu
         {
             var v = _cfg.vehicle;
             if (v.per_tank == null) v.per_tank = new Dictionary<string, TankVehicleCfg>();
+            // Field by field, not a fresh entry: replacing it would drop the elevation, torque_scale
+            // and decel_time the user had set on those tanks.
             foreach (var row in RealismTable)
             {
-                v.per_tank[row.name] = new TankVehicleCfg
+                if (!v.per_tank.TryGetValue(row.name, out var entry) || entry == null)
                 {
-                    max_speed = row.mps,
-                    traverse = row.traverse,
-                    accel_time = row.accel,
-                };
+                    entry = new TankVehicleCfg();
+                    v.per_tank[row.name] = entry;
+                }
+                entry.max_speed = row.mps;
+                entry.traverse = row.traverse;
+                entry.accel_time = row.accel;
             }
             ApplyVehicleOverrides();
             _status = "realism table written (" + RealismTable.Length + " tanks) - press Save";

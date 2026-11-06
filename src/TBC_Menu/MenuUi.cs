@@ -412,7 +412,18 @@ namespace TbcMenu
             AddRow(ref y, "  clear this tank", () => "click", d =>
             {
                 var cfg = _cfg.vehicle;
-                if (cfg.per_tank != null && cfg.per_tank.Remove(EditTankName)) ApplyVehicleOverrides();
+                string tank = EditTankName;
+                if (cfg.per_tank != null) cfg.per_tank.Remove(tank);
+                // Put the game's own values back for that tank before the global scales are
+                // re-applied, or the ramp, the flags and the cached rates stay behind.
+                foreach (var drive in UnityEngine.Object.FindObjectsOfType<Drive_Control_CS>())
+                {
+                    if (drive == null) continue;
+                    if (TankNameOf(drive.transform) != tank) continue;
+                    RestoreTankOriginals(drive);
+                }
+                ApplyVehicleOverrides();
+                _status = "cleared " + tank + " - game values restored";
             }, null, false);
             AddRow(ref y, "Load realism table", () => "write " + RealismTable.Length + " tanks", d => LoadRealismTable(), null, false);
             AddRow(ref y, "Dump vehicle values", () => "write json", d => DumpVehicles(), null, false);

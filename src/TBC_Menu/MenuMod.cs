@@ -13,7 +13,7 @@ using UnityEngine.UI;
 using Il2CppChobiAssets.PTM;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 
-[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.7.3", "murkzuk")]
+[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.7.4", "murkzuk")]
 [assembly: MelonAdditionalCredits("Built by DeepSeek at murkzuk's request")]
 [assembly: MelonGame(null, null)]
 

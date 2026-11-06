@@ -162,12 +162,16 @@ snap around like a tank in an arcade game. This tab replaces those numbers per t
 | `elevation` | deg/s | gun elevation |
 | `accel_time` | s | standstill to full speed |
 | `decel_time` | s | full speed to standstill |
-| `torque_scale` | x | multiplies the game's wheel torque (slopes only, see below) |
+| `torque_scale` | x | multiplies the game's **`defaultTorque`** (slopes only, see below) |
 
-Entries are keyed by `Tank_Prop_SO.Tank_Name` ("T-34/76", "Tiger I"); the **Tank** row in the menu
-cycles through the tanks in the current mission and edits the selected one. **Load realism table**
-fills in the values for the whole roster; **Dump vehicle values** writes every live value, including
-the drive flags and world positions, to `UserData\TBC_Vehicles.json`.
+Entries are keyed by `Tank_Prop_SO.Tank_Name` ("T-34/76", "Tiger I") - all 19 names are verified
+against the game's own catalogue, and each AI variant carries the same name, so one entry covers
+both. The **Tank** row in the menu cycles through the tanks in the current mission and edits the
+selected one. **Load realism table** fills in the values for the whole roster without disturbing
+`elevation`/`torque_scale`/`decel_time` you set yourself, **clear this tank** deletes that tank's
+entry *and* puts the game's own values back (ramp flags and cached rates included), and **Dump
+vehicle values** writes every live value - torque, both cached rates, the drive flags, the AI
+settings and world positions - to `UserData\TBC_Vehicles.json`.
 
 Two things worth knowing before you tune:
 
@@ -179,6 +183,8 @@ Two things worth knowing before you tune:
   `Sync_Speed_Rate` is off, and the cached `acceleRate` is refreshed; the mod sets all three when
   `accel_time` is given. That is what stops every tank accelerating like a go-kart. Note it
   disables the game's speed synchronisation for that tank, which has not been tested on hills.
+  `decel_time` works the same way and refreshes its own cached `deceleRate` - it used to be
+  refreshed only when `accel_time` was also set, which made it inert on its own.
 - **Historical turret traverse is slow.** 5 deg/s (T-34/76) means a 30 degree swing takes six
   seconds while the crosshair moves instantly, so the gun visibly trails the reticle. That is
   realism fighting the game's mouse aiming, not a bug - soften the `traverse` values if it bothers
