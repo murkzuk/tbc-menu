@@ -1,5 +1,11 @@
 # TODO
 
+## Retired: the Effects tab is gone (1.7.7)
+
+Removed from the menu rather than left there doing nothing. The config keeps its `effects` block (old
+files still load, nothing reads it) and `ApplyEffects` remains as a log-only stub that says plainly
+that these five settings are not applied and why. The finding behind it:
+
 ## Answered: the Effects tab cannot work in this game (1.7.6)
 
 The tab is now honest instead of broken: it logs what it was asked to do and says plainly that it is

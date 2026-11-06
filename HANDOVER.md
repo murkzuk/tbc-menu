@@ -1,10 +1,8 @@
 # Handover
 
-Everything needed to pick this up cold. Mod version **1.7.6** (native-resolution rendering in every
-camera mode, the menu and buffer clean-up, a Tuning tab that undoes itself, the four vehicle-override
-fixes, and the Effects tab retired as not deliverable - the 1.7.6 commit, see `git log`). Two
-installed custom scenarios. Read this, then `README.md`, `TODO.md`, `docs/vehicle-model.md` and
-`docs/terrain-and-scenarios.md`.
+Everything needed to pick this up cold. Mod version **1.7.7** - five tabs now, Effects removed -
+see `git log`. Two installed custom scenarios. Read this, then `README.md`, `TODO.md`,
+`docs/vehicle-model.md` and `docs/terrain-and-scenarios.md`.
 
 ## The two repos
 
@@ -176,8 +174,8 @@ drive flags) and `MelonLoader\Latest.log` - are usually faster than eyeballing a
 
 ## Where it stands right now
 
-- Repo clean, pushed, MIT, credited to murkzuk with the DeepSeek build note. `dist\TBC_Menu-1.7.6.zip`.
-- Installed: `<game>\Mods\TBC_Menu.dll` 1.7.6 (`ABABDC33...`), hash-identical to the build. `version.dll` is back
+- Repo clean, pushed, MIT, credited to murkzuk with the DeepSeek build note. `dist\TBC_Menu-1.7.7.zip`.
+- Installed: `<game>\Mods\TBC_Menu.dll` 1.7.7 (`7455D0C5...`), hash-identical to the build. `version.dll` is back
   in place (MelonLoader active).
 - User config: `Render direct to screen` on, `internal_scale` 0, MSAA 8, render scale 2, shadow
   distance 400, seven per-tank vehicle entries, `player_only: true`.
@@ -227,10 +225,11 @@ first of the follow-ups:
 
 ## Open items, in the order they matter
 
-1. **The Effects tab is retired** - this game's pipeline honours only the volume components it ships,
-   so exposure/contrast/saturation/bloom/tonemapping cannot be added from a mod (three delivery
-   routes tried and measured; see `TODO.md`). Film grain, chromatic aberration and vignette work and
-   live in the Visuals tab. Going further means patching below the Volume system - a research task.
+1. **Effects are out of scope** - the tab was removed in 1.7.7. This game's pipeline honours only the
+   volume components it ships, so exposure/contrast/saturation/bloom/tonemapping cannot be added from
+   a mod (three delivery routes tried and measured; see `TODO.md`). Film grain, chromatic aberration
+   and vignette work, and live in the Visuals tab. Going further means patching below the Volume
+   system - a research task, not a fix.
 2. **Aim at a non-16:9 window** is geometry-checked, not shot-tested: at 1440x1080 the game
    letterboxes the 3D camera (`pixelRect 0,135,1440,810`) while the constants track the screen, so
    the two no longer match. 16:9 is unaffected. Fix, if needed, is to take the constants from the main

@@ -66,8 +66,10 @@ while the menu is open, and the gun is handed back loaded when it closes. Clicks
 | **Resolution** | window size, fullscreen mode, **Render direct to screen**, internal buffer scale (0 = stock buffer - leave it there, see below), live buffer readout |
 | **Visuals** | film grain, chromatic aberration, vignette, fog density, antialiasing (off/fxaa/smaa/taa), dithering, texture aniso, **commander view** |
 | **Quality** | MSAA 1-8x, main light shadowmap 1024-4096, soft shadow quality, shadow distance, render scale (supersampling) |
-| **Effects** | tonemapping (none/neutral/ACES), bloom + threshold, exposure, contrast, saturation |
 | **Vehicle** | per-tank top speed, turret traverse, gun elevation, acceleration and torque, plus a realism table and a live speed readout |
+
+There is no Effects tab: this game's pipeline ignores post components created at runtime, so exposure,
+bloom and the rest could not be offered honestly. Details in `TODO.md`.
 | **Tuning** | tuning multiplier scales, max tuning levels, AI preset and scales, AI passive, unlock all tanks, points |
 
 **F8** dumps the render/UI geometry to `MelonLoader\Latest.log` (cameras, viewport rects, canvases,

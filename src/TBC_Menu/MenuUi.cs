@@ -44,7 +44,9 @@ namespace TbcMenu
             public Func<string> value;
         }
 
-        private static readonly string[] TabNames = { "Resolution", "Visuals", "Quality", "Effects", "Vehicle", "Tuning" };
+        // No Effects tab: this game's pipeline ignores post components created at runtime, so
+        // exposure/contrast/saturation/bloom/tonemapping cannot be offered honestly. See TODO.md.
+        private static readonly string[] TabNames = { "Resolution", "Visuals", "Quality", "Vehicle", "Tuning" };
         private const float PanelX = 40f, PanelY = 50f, PanelW = 780f, RowH = 34f;
         private const float LabelX = 56f, LabelW = 520f, ValueX = 600f, ValueW = 200f;
 
@@ -136,8 +138,7 @@ namespace TbcMenu
             if (_tab == 0) total += RowH * 7f;
             else if (_tab == 1) total += RowH * 20f;
             else if (_tab == 2) total += RowH * 6f;
-            else if (_tab == 3) total += RowH * 7f;
-            else if (_tab == 4) total += RowH * 19f;
+            else if (_tab == 3) total += RowH * 19f;
             else total += RowH * 16f;
             total += RowH * 4f;
             MakeImage(PanelX, PanelY, PanelW, total, new Color(0.02f, 0.02f, 0.05f, 0.95f));
@@ -162,8 +163,7 @@ namespace TbcMenu
             if (_tab == 0) BuildResolutionRows(ref y);
             else if (_tab == 1) BuildVisualRows(ref y);
             else if (_tab == 2) BuildQualityRows(ref y);
-            else if (_tab == 3) BuildEffectRows(ref y);
-            else if (_tab == 4) BuildVehicleRows(ref y);
+            else if (_tab == 3) BuildVehicleRows(ref y);
             else BuildTuningRows(ref y);
 
             y += 8f;
@@ -330,16 +330,6 @@ namespace TbcMenu
             AddRow(ref y, "note", () => "render scale > 1 = supersampling", null, new Color(0.6f, 0.65f, 0.75f));
         }
 
-        private void BuildEffectRows(ref float y)
-        {
-            var e = _cfg.effects;
-            AddChoiceRow(ref y, "Tonemapping", new[] { "none", "neutral", "aces" }, () => e.tonemapping ?? "none", s => { e.tonemapping = s; ApplyEffects("menu"); });
-            AddFloatRow(ref y, "Bloom intensity", () => e.bloom, x => { e.bloom = x; ApplyEffects("menu"); }, 0f, 2f, 0.1f, "F2");
-            AddFloatRow(ref y, "Bloom threshold", () => e.bloom_threshold, x => { e.bloom_threshold = x; ApplyEffects("menu"); }, 0f, 2f, 0.1f, "F2");
-            AddFloatRow(ref y, "Exposure", () => e.exposure, x => { e.exposure = x; ApplyEffects("menu"); }, -2f, 2f, 0.1f, "F2");
-            AddFloatRow(ref y, "Contrast", () => e.contrast, x => { e.contrast = x; ApplyEffects("menu"); }, -50f, 50f, 5f, "F0");
-            AddFloatRow(ref y, "Saturation", () => e.saturation, x => { e.saturation = x; ApplyEffects("menu"); }, -50f, 50f, 5f, "F0");
-        }
 
         private void BuildVehicleRows(ref float y)
         {
