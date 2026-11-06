@@ -59,8 +59,9 @@ namespace TbcMenu
             new System.Collections.Generic.Dictionary<int, RenderTexture>();
         private GameObject _bufferCanvas;
         private RenderTexture _bufferTex;
-        private float _nextCanvasFind, _nextConstantsLog;
+        private float _nextCanvasFind, _nextConstantsLog, _nextBufferFind, _nextWarnLog;
         private int _origRTW = -1, _origRTH = -1;
+        private const string BufferCanvasName = "Canvas (Main RT)";
 
         private void ApplyBufferBypass()
         {
@@ -75,7 +76,17 @@ namespace TbcMenu
             try
             {
                 if (_cfg == null || !_cfg.enabled || _cfg.resolution == null || !_cfg.resolution.bypass_buffer) return;
-                if (_bufferTex == null) _bufferTex = FindBuffer();
+
+                // The buffer reference is sticky: it is re-found (twice a second at most) only when
+                // there is none, or when the one we hold has been destroyed by a scene change. A
+                // scene transition leaves the canvas briefly absent, and forgetting the buffer then
+                // would put the 3D view back into the hidden buffer for a frame or two.
+                if (_bufferTex != null && !BufferTexAlive()) _bufferTex = null;
+                if (_bufferTex == null && Time.unscaledTime >= _nextBufferFind)
+                {
+                    _nextBufferFind = Time.unscaledTime + 0.5f;
+                    _bufferTex = FindBuffer();
+                }
                 if (_bufferTex == null) return;
 
                 foreach (var cam in Camera.allCameras)
@@ -130,7 +141,20 @@ namespace TbcMenu
                     }
                 }
             }
-            catch (Exception e) { LoggerInstance.Warning("buffer bypass: " + e.Message); }
+            catch (Exception e) { WarnThrottled("buffer bypass: " + e.Message); }
+        }
+
+        // This path can run every frame, so a failing call must not fill the log.
+        private void WarnThrottled(string message)
+        {
+            if (Time.unscaledTime < _nextWarnLog) return;
+            _nextWarnLog = Time.unscaledTime + 5f;
+            LoggerInstance.Warning(message);
+        }
+
+        private bool BufferTexAlive()
+        {
+            try { return _bufferTex.width > 0; } catch { return false; }
         }
 
         private void RestoreBufferBypass()
@@ -183,7 +207,7 @@ namespace TbcMenu
             {
                 foreach (var canvas in Resources.FindObjectsOfTypeAll<Canvas>())
                 {
-                    if (canvas == null || canvas.name != "Canvas (Main RT)") continue;
+                    if (canvas == null || canvas.name != BufferCanvasName) continue;
                     return canvas.gameObject;
                 }
             }
@@ -191,22 +215,50 @@ namespace TbcMenu
             return null;
         }
 
+        // Which RenderTexture is *the* view buffer? It is the one the full screen RawImage on
+        // "Canvas (Main RT)" displays, so that canvas is the primary anchor. Searching for "any
+        // RenderTexture a RawImage holds" is not good enough: a briefing screen also carries the
+        // 256x256 minimap, and mistaking that for the buffer redirects the minimap camera to the
+        // screen while the real view buffer stays hidden (seen in game, 1.7.1).
         private RenderTexture FindBuffer()
         {
+            try
+            {
+                foreach (var canvas in Resources.FindObjectsOfTypeAll<Canvas>())
+                {
+                    if (canvas == null || canvas.name != BufferCanvasName) continue;
+                    var raw = canvas.GetComponentsInChildren<RawImage>(true);
+                    if (raw == null) continue;
+                    foreach (var ri in raw)
+                    {
+                        if (ri == null || ri.texture == null) continue;
+                        var rt = ri.texture.TryCast<RenderTexture>();
+                        if (rt != null) return rt;
+                    }
+                }
+            }
+            catch { }
+            // Fallback: a screen sized RenderTexture anywhere. The floor of 512 px wide keeps the
+            // 256x256 minimap out of it even if the canvas is named differently in a later build.
             try
             {
                 foreach (var ri in Resources.FindObjectsOfTypeAll<RawImage>())
                 {
                     if (ri == null || ri.texture == null) continue;
                     var rt = ri.texture.TryCast<RenderTexture>();
-                    if (rt != null) return rt;
+                    if (rt == null || rt.width < 512) continue;
+                    return rt;
                 }
             }
             catch { }
             try
             {
                 foreach (var c in Camera.allCameras)
-                    if (c != null && c.targetTexture != null) return c.targetTexture;
+                {
+                    if (c == null || c.targetTexture == null) continue;
+                    if (c.targetTexture.width < 512) continue;
+                    return c.targetTexture;
+                }
             }
             catch { }
             return null;
@@ -306,7 +358,6 @@ namespace TbcMenu
         private void ApplyFog(string why)
         {
             var v = _cfg.visuals;
-            if (Math.Abs(v.fog_density_scale - 1f) < 0.0001f) return;
             try
             {
                 if (!RenderSettings.fog) return;
@@ -316,7 +367,12 @@ namespace TbcMenu
                     orig = RenderSettings.fogDensity;
                     _fogOriginal[scene] = orig;
                 }
-                RenderSettings.fogDensity = orig * Mathf.Max(0f, v.fog_density_scale);
+                // No early-out for scale == 1: going back to 1.0 has to write the game value, or
+                // the scene keeps whatever the last scaled density was.
+                float want = orig * Mathf.Max(0f, v.fog_density_scale);
+                if (Mathf.Abs(RenderSettings.fogDensity - want) < 0.000001f) return;
+                RenderSettings.fogDensity = want;
+                LoggerInstance.Msg($"fog density {want:F5} (game {orig:F5} x {v.fog_density_scale:F2}) [{why}]");
             }
             catch (Exception e) { LoggerInstance.Warning("fog: " + e.Message); }
         }

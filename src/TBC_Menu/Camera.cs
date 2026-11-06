@@ -354,7 +354,7 @@ namespace TbcMenu
                 var cfg = _cfg.camera;
                 ApplyCommanderOffsets(Time.deltaTime);
                 float sens = cfg == null ? 2f : Mathf.Clamp(cfg.commander_sensitivity, 0.2f, 10f);
-                Vector2 d = ReadMouseDelta();
+                Vector2 d = _open ? Vector2.zero : ReadMouseDelta();   // the menu owns the mouse
                 if (d.x != 0f || d.y != 0f)
                 {
                     _cmdYaw += d.x * sens;

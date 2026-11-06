@@ -54,8 +54,12 @@ delete `version.dll`, `MelonLoader\`, `Mods\` and `UserData\` from the game fold
 ## The menu
 
 `F7` opens it. Rows: **left half of the value area decreases, right half increases**. ON/OFF rows
-toggle, choice rows cycle. The cursor is unlocked while it is open and the gun is muted, so
-clicking cannot fire.
+toggle, choice rows cycle. The cursor is unlocked while it is open and the player's gun is held
+unloaded, so clicking a row cannot fire. (The game's mouse input scripts cannot simply be
+disabled - they have no `Update` and are polled by their owner - so the fire path's own
+`Is_Loaded` guard is what gets held down. Side effect: the HUD shows a frozen "Reloading" bar
+while the menu is open, and the gun is handed back loaded when it closes. Clicks aimed at the
+*game's* UI behind the panel are not blocked.)
 
 | Tab | What it controls |
 |---|---|

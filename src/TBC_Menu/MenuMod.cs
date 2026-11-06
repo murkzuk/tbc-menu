@@ -13,7 +13,7 @@ using UnityEngine.UI;
 using Il2CppChobiAssets.PTM;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 
-[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.7.1", "murkzuk")]
+[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.7.2", "murkzuk")]
 [assembly: MelonAdditionalCredits("Built by DeepSeek at murkzuk's request")]
 [assembly: MelonGame(null, null)]
 
@@ -64,6 +64,9 @@ namespace TbcMenu
             ResetBufferTracking();     // new scene, new buffer, new cameras
             ResetVehicleSnaps();       // new tanks, new first-seen values
             ResetDiag();               // fresh three dumps for each scene
+            // A new scene brings new fire/camera scripts and the old ones died with the old scene:
+            // re-suspend against the new ones, or the menu stays open over a live gun.
+            if (_open) { SetGameInputSuspended(false); SetGameInputSuspended(true); }
             if (!_cfg.enabled) return;
             ApplyAll("scene " + sceneName);
             _nextTick = 0f;
@@ -93,6 +96,7 @@ namespace TbcMenu
             ApplyEffects("tick");
             ApplyTuningRuntime("tick");
             ApplyVehicleOverrides();
+            if (_open) EnsurePlayerFireBlocked();    // a respawn or a new mission brings a fresh cannon
             SyncBuffer("tick");
             AutoDiag();
         }
@@ -109,12 +113,12 @@ namespace TbcMenu
                 _tab = 0;
                 _builtTab = -1;            // force rebuild
                 UpdateMenu();
-                SetFireInputEnabled(false);
+                SetGameInputSuspended(true);
             }
             else
             {
                 try { Cursor.lockState = _prevLock; Cursor.visible = _prevVisible; } catch { }
-                SetFireInputEnabled(true);
+                SetGameInputSuspended(false);
                 if (_root != null) _root.SetActive(false);
             }
         }

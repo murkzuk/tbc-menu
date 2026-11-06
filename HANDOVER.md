@@ -1,8 +1,9 @@
 # Handover
 
-Everything needed to pick this up cold. Mod version **1.7.1** (native-resolution rendering in
-every camera mode - the 1.7.1 commit, see `git log`). Two installed custom scenarios. Read this,
-then `README.md`, `TODO.md`, `docs/vehicle-model.md` and `docs/terrain-and-scenarios.md`.
+Everything needed to pick this up cold. Mod version **1.7.2** (native-resolution rendering in every
+camera mode, plus the menu and buffer clean-up - the 1.7.2 commit, see `git log`). Two installed
+custom scenarios. Read this, then `README.md`, `TODO.md`, `docs/vehicle-model.md` and
+`docs/terrain-and-scenarios.md`.
 
 ## The two repos
 
@@ -174,8 +175,8 @@ drive flags) and `MelonLoader\Latest.log` - are usually faster than eyeballing a
 
 ## Where it stands right now
 
-- Repo clean, pushed, MIT, credited to murkzuk with the DeepSeek build note. `dist\TBC_Menu-1.7.1.zip`.
-- Installed: `<game>\Mods\TBC_Menu.dll` 1.7.1 (`D35F9AA3...`), hash-identical to the build. `version.dll` is back
+- Repo clean, pushed, MIT, credited to murkzuk with the DeepSeek build note. `dist\TBC_Menu-1.7.2.zip`.
+- Installed: `<game>\Mods\TBC_Menu.dll` 1.7.2 (`754B4DA7...`), hash-identical to the build. `version.dll` is back
   in place (MelonLoader active).
 - User config: `Render direct to screen` on, `internal_scale` 0, MSAA 8, render scale 2, shadow
   distance 400, seven per-tank vehicle entries, `player_only: true`.
@@ -183,9 +184,19 @@ drive flags) and `MelonLoader\Latest.log` - are usually faster than eyeballing a
 - `save.json` carries the two verified clears (`Mission_Cleared` 6, 12 kills, 12200 points); backups
   taken before the play tests are in `scratch\save_before_play*.json`.
 
-## Verified since the previous handover (1.7.1)
+## Verified since the previous handover (1.7.1, 1.7.2)
 
-Both items that were open here have been measured and closed.
+Both items that were open at the 1.7.0 handover have been measured and closed, and 1.7.2 closed the
+first of the follow-ups:
+
+- **1.7.2 - the buffer is identified by the canvas that displays it**, so a briefing screen can no
+  longer mistake its 256x256 minimap for the 854x480 view buffer. In the same release: fog returns
+  to the game value at scale 1.0 (it used to stick), *Reload from disk* rebuilds the menu instead of
+  leaving it bound to the replaced config object, per-frame warnings are rate-limited, and the gun
+  is genuinely muted while the menu is open - the 1.7.0 mute never worked, because the game's mouse
+  input scripts have no `Update` and are polled by their owner; the fire path's `Is_Loaded` guard is
+  what is held down instead. Verified with `save.json`: one shot in a whole session, from the single
+  click made with the menu closed.
 
 - **The bypass now covers every camera mode.** With `bypass_buffer` on, 1.7.0 left `Gun_Camera`
   (gun sight) and `Camera (Map)` rendering into the 854x480 buffer whose canvas the bypass hides -
@@ -200,16 +211,21 @@ Both items that were open here have been measured and closed.
 
 ## Open items, in the order they matter
 
-1. **Briefing-scene buffer identification** - while a briefing screen is up, `FindBuffer()` can pick
-   the 256x256 minimap RenderTexture instead of the 854x480 view buffer (1.7.1 log:
-   `camera 'Camera (Map)' ... (had the 256x256 buffer)`). Battle scenes are unaffected. The fix is
-   to identify the buffer as the RenderTexture the world cameras render into and refuse anything
-   under ~512 px.
+1. **Tuning does not undo itself** - `ApplyTuningRuntime` returns early when the tab is disabled, so
+   the six scaled `Tuning_Value` arrays and every snapped AI value stay modified, and
+   `ai.No_Attack` is forced to `false` on every AI every 2 s instead of being left alone.
 2. **Terrain: iterate on the half-height version** - it is at ~1.2 deg mean slope now; if it reads too
    flat, the way to keep the height while restoring hill character is shorter wavelengths (ridged
    noise), not more amplitude.
-3. **Torque on slopes** is still unmeasured (`torque_scale` only shows on gradients).
-4. **Backlog**: `cost_scale` and `allow_manual_respawn` (lost in an earlier consolidation), the two
+3. **Vehicle overrides have four known defects** - torque is scaled from the slope-limited `Torque`
+   instead of `defaultTorque` (the dump shows `2799.9` vs `3000.0`), `deceleRate` is only refreshed
+   when `accel_time` is set, *Clear this tank* leaves the acceleration ramp behind, and *Load realism
+   table* replaces whole entries so `elevation`/`torque_scale`/`decel_time` are lost. Also open: 12 of
+   the 19 tank keys are still guesses - one dump session settles it.
+4. **Non-16:9 aiming** - `Fixed_Aspect_Camera_CS` letterboxes to 1.7778, so the aim constants may
+   need the camera rect rather than the screen size; untested at 21:9 and 4:3.
+5. **Torque on slopes** is still unmeasured (`torque_scale` only shows on gradients).
+6. **Backlog**: `cost_scale` and `allow_manual_respawn` (lost in an earlier consolidation), the two
    AI knobs that exist in config but have no menu row, AI deceleration (dumps show 0.01 s, i.e. AI
    tanks stop instantly).
 

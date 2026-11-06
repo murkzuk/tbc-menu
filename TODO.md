@@ -1,5 +1,33 @@
 # TODO
 
+## Done: menu and buffer clean-up (1.7.2)
+
+Five fixes, each verified in game rather than reasoned about:
+
+- **The buffer finder is anchored, sticky and throttled.** It now takes the RenderTexture from the
+  RawImage on `Canvas (Main RT)` and refuses anything under 512 px, so the 256x256 minimap of a
+  briefing screen can no longer be mistaken for the view buffer (1.7.1 logged
+  `camera 'Camera (Map)' ... (had the 256x256 buffer)`). The reference survives a scene transition
+  and is re-acquired at most twice a second.
+- **Fog returns to the game value at scale 1.0.** The old early-out meant going back to 1.0 left the
+  scene at whatever the last scaled density was. It now writes and logs
+  `fog density 0.00045 (game 0.00075 x 0.60)`.
+- **Reload from disk rebuilds the menu.** `Load()` replaces the config object while every row
+  closure had captured a section of the old one, so edits after a reload went nowhere. Verified:
+  reload reverts the display, and the next click still reaches the config.
+- **Per-frame failures log once per 5 s** instead of every frame.
+- **The gun is actually muted while the menu is open.** The 1.7.0 mute never worked: the game's mouse
+  input scripts (`Cannon_Fire_Input_01_Mouse_CS`, `Camera_Rotation_Input_01_Mouse_CS`, ...) have
+  **no `Update`** - they expose `Get_Input()` and their owner calls it every frame - so
+  `enabled = false` does nothing (measured: a click fired through the menu with four of them
+  disabled). What the fire path does test is `Cannon_Fire_CS.Is_Loaded`, so the player's cannon is
+  held unloaded while the menu is up, re-asserted on the 2 s tick and after a scene change, and
+  handed back loaded on close. AI cannons are untouched. Verified with `save.json`: one shot in a
+  whole session, from the single click made with the menu closed.
+
+Cosmetic: a frozen "Reloading" bar while the menu is open. Clicks still reach the game's own UI
+behind the panel - only the gun is protected.
+
 ## Done: the bypass in every camera mode, and a mission played to completion (1.7.1)
 
 Two handover items were open; both are now measured rather than assumed.

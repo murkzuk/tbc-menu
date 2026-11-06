@@ -24,7 +24,15 @@ namespace TbcMenu
         private Transform _canvasTr;
         private Font _font;
         private readonly List<Row> _rows = new List<Row>();
-        private readonly List<Cannon_Fire_Input_01_Mouse_CS> _mutedFire = new List<Cannon_Fire_Input_01_Mouse_CS>();
+        // The player's gun, held unloaded while the menu is open.
+        //
+        // The game's mouse input scripts (Cannon_Fire_Input_01_Mouse_CS and friends) are not
+        // Update-driven - they expose Get_Input(), which the consuming script calls every frame -
+        // so disabling the component does nothing at all. Measured in 1.7.2: four of them were
+        // disabled and a click still fired through the open menu. What the fire path does respect is
+        // Cannon_Fire_CS.Is_Loaded (it returns before reading the fire key), so that is what is held
+        // down here - only on the player's tank, so the AI keeps shooting.
+        private readonly List<Cannon_Fire_CS> _mutedFire = new List<Cannon_Fire_CS>();
         private int _builtTab = -1;
 
         private class Row
@@ -160,7 +168,9 @@ namespace TbcMenu
 
             y += 8f;
             AddRow(ref y, "Save settings", () => "click", d => Save(), null, false);
-            AddRow(ref y, "Reload from disk", () => "click", d => { Load(); ApplyAll("reload"); }, null, false);
+            // Load() replaces _cfg with a fresh object and every row closure captured its section of the
+        // old one, so the menu has to be rebuilt or edits made after a reload go nowhere.
+        AddRow(ref y, "Reload from disk", () => "click", d => { Load(); ApplyAll("reload"); RefreshEditTankList(); _builtTab = -1; }, null, false);
             AddRow(ref y, "Close  (F7)", () => "click", d => Toggle(), null, false);
             AddRow(ref y, "left half = down / right half = up", () => "", null, new Color(0.6f, 0.65f, 0.75f));
 
@@ -461,27 +471,62 @@ namespace TbcMenu
             catch (Exception e) { LoggerInstance.Warning("menu input: " + e.Message); }
         }
 
-        private void SetFireInputEnabled(bool enable)
+        private void SetGameInputSuspended(bool suspend)
         {
             try
             {
-                if (!enable)
+                if (suspend) BlockPlayerFire();
+                else ReleasePlayerFire();
+            }
+            catch (Exception e) { LoggerInstance.Warning("fire block: " + e.Message); }
+        }
+
+        // Also runs on the 2 s tick: a respawn or a new mission brings a fresh cannon that has to be
+        // held down too, and a reload that finished while the menu was open puts Is_Loaded back up.
+        private void EnsurePlayerFireBlocked()
+        {
+            try
+            {
+                Transform player = PlayerTankRoot();
+                if (player == null) return;
+                foreach (var fire in UnityEngine.Object.FindObjectsOfType<Cannon_Fire_CS>())
                 {
-                    _mutedFire.Clear();
-                    foreach (var fi in UnityEngine.Object.FindObjectsOfType<Cannon_Fire_Input_01_Mouse_CS>())
-                    {
-                        if (fi == null || !fi.enabled) continue;
-                        fi.enabled = false;
-                        _mutedFire.Add(fi);
-                    }
-                }
-                else
-                {
-                    foreach (var fi in _mutedFire) if (fi != null) fi.enabled = true;
-                    _mutedFire.Clear();
+                    if (fire == null) continue;
+                    if (TankRootOf(fire.transform) != player) continue;   // the AI keeps its guns
+                    if (!fire.Is_Loaded) continue;
+                    fire.Is_Loaded = false;
                 }
             }
-            catch (Exception e) { LoggerInstance.Warning("fire mute: " + e.Message); }
+            catch (Exception e) { LoggerInstance.Warning("fire block: " + e.Message); }
+        }
+
+        private void BlockPlayerFire()
+        {
+            Transform player = PlayerTankRoot();
+            if (player == null) return;
+            _mutedFire.Clear();
+            foreach (var fire in UnityEngine.Object.FindObjectsOfType<Cannon_Fire_CS>())
+            {
+                if (fire == null) continue;
+                if (TankRootOf(fire.transform) != player) continue;
+                _mutedFire.Add(fire);
+                fire.Is_Loaded = false;
+            }
+            if (_mutedFire.Count > 0)
+                LoggerInstance.Msg($"menu open: player gun held unloaded ({_mutedFire.Count} cannon(s))");
+        }
+
+        private void ReleasePlayerFire()
+        {
+            foreach (var fire in _mutedFire)
+            {
+                if (fire == null) continue;
+                bool reloading = false;
+                try { reloading = fire.reloadCoroutine != null; } catch { }
+                if (reloading) continue;                 // let the game finish and set the flag itself
+                try { fire.Is_Loaded = true; } catch { }
+            }
+            _mutedFire.Clear();
         }
     }
 }

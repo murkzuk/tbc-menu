@@ -149,8 +149,21 @@ camera as it is caught:
 Verified in the same mission: gun sight and map both render at native resolution, and the map's
 markers stay on their tanks.
 
-**Left over:** the buffer is found through the full-screen RawImage that displays it, and a
-briefing screen has a second RawImage holding the **256x256 minimap** RenderTexture, so in that
-scene the wrong texture can be picked (log: `camera 'Camera (Map)' ... (had the 256x256 buffer)`).
-Battle scenes are unaffected. The robust identification is "the RenderTexture the world cameras
-render into", i.e. never one below about 512 px.
+**Fixed in 1.7.2:** the buffer is now identified by the canvas that displays it - the RawImage on
+`Canvas (Main RT)` - with a fallback that refuses any RenderTexture narrower than 512 px, so the
+**256x256 minimap** of a briefing screen can no longer be picked instead. The reference is sticky
+across a scene transition and re-acquired at most twice a second.
+
+## The input scripts are polled, not self-updating (2026-11-06)
+
+Every `*_Input_0X_*_CS` here - `Cannon_Fire_Input_01_Mouse_CS`,
+`Camera_Rotation_Input_01_Mouse_CS`, `Camera_Zoom_Input_01_Mouse_CS`,
+`Aiming_Control_Input_01_Mouse_Keyboard_CS` - is a MonoBehaviour with **no `Update`**. It exposes
+`Get_Input()` (virtual slot 5 on the base class) and its owner calls it every frame, so
+`enabled = false` on one of them does nothing at all. Measured the hard way: 1.7.2 disabled four of
+them while the F7 menu was open and a click still fired a shell through the menu.
+
+The mutes that work are written into the state the consumer branches on. `Cannon_Fire_CS` returns
+from its input before it reads the fire key unless `Is_Loaded` is set, so holding that flag down
+blocks the player's gun - and only the player's, so the AI keeps firing. For anything else worth
+gating, find the field the consumer tests, not the script that writes it.
