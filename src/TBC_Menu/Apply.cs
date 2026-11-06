@@ -706,46 +706,115 @@ namespace TbcMenu
         }
 
 
-        // ---- post effects (not deliverable in this game - see below) --------
+        // ---- post effects (own volume, overrides forced on) -----------------
 
         private string _effectsStamp;
+        private Volume _fxVolume;
+        private Bloom _fxBloom;
+        private Tonemapping _fxTone;
+        private ColorAdjustments _fxColor;
 
-        // Measured, exhaustively, in 1.7.5/1.7.6 while trying to make this tab work:
-        //
-        //   * the game's OWN components respond - writing vignette 0.6 turned the corners black
-        //     (corner pixel 121 -> 0) and film grain/CA behave the same way;
-        //   * a component the mod CREATES is ignored, whatever is done with it:
-        //       - appended to the game's VolumeProfile: logged as present, no visual change;
-        //       - in a fresh global Volume (own GameObject, layer 0, priority 100, weight 1,
-        //         VolumeManager live): bloom 2.0 at threshold 0 produced no glow at all;
-        //       - in a new profile swapped onto the game's own Volume: still nothing.
-        //
-        // So this build's pipeline honours only the volume components it ships. Exposure, contrast,
-        // saturation, bloom and tonemapping therefore cannot be added from a mod without going lower
-        // than the Volume system; what the project actually needs - film grain, chromatic aberration
-        // and vignette - is handled in the Visuals tab and works.
+        // Earlier attempts (1.7.5/1.7.6) concluded this game ignores components a mod creates. The
+        // missing piece was VolumeParameter.overrideState: URP ignores a parameter whose override
+        // flag is false, and a component built with ScriptableObject.CreateInstance starts with every
+        // flag false - while the components the game ships were authored with theirs true, which is
+        // exactly why writing those (vignette turned the corners black) worked and writing ours did
+        // nothing, however it was delivered.
+        private void ForceOverrides(VolumeComponent comp)
+        {
+            if (comp == null) return;
+            try { comp.SetAllOverridesTo(true); return; } catch { }
+            try
+            {
+                var ps = comp.parameters;
+                if (ps == null) return;
+                for (int i = 0; i < ps.Count; i++)
+                {
+                    var p = ps[i];
+                    if (p != null) p.overrideState = true;
+                }
+            }
+            catch { }
+        }
+
+        // Attach our three components to the profile the pipeline actually blends: the game's own
+        // volume, and its runtime profile instance. Overrides are forced on, because URP ignores a
+        // parameter whose overrideState is false and a CreateInstance component starts with them all
+        // false - that is why the components the game ships (authored, overrides true) responded and
+        // ours did not.
+        private void EnsureEffectVolume()
+        {
+            if (_fxVolume != null && _fxColor != null) return;
+            try
+            {
+                if (VolumeManager.instance == null) return;
+                Volume target = null;
+                VolumeProfile prof = null;
+                foreach (var v in Resources.FindObjectsOfTypeAll<Volume>())
+                {
+                    if (v == null) continue;
+                    try { prof = v.profile; } catch { prof = null; }
+                    if (prof == null || prof.components == null) { try { prof = v.sharedProfile; } catch { } }
+                    if (prof == null || prof.components == null) continue;
+                    target = v;
+                    break;
+                }
+                if (target == null || prof == null) return;
+
+                foreach (var c in prof.components)
+                {
+                    if (c == null) continue;
+                    if (_fxBloom == null) _fxBloom = c.TryCast<Bloom>();
+                    if (_fxTone == null) _fxTone = c.TryCast<Tonemapping>();
+                    if (_fxColor == null) _fxColor = c.TryCast<ColorAdjustments>();
+                }
+                if (_fxBloom == null) { _fxBloom = ScriptableObject.CreateInstance<Bloom>(); ForceOverrides(_fxBloom); prof.components.Add(_fxBloom); }
+                if (_fxTone == null) { _fxTone = ScriptableObject.CreateInstance<Tonemapping>(); ForceOverrides(_fxTone); prof.components.Add(_fxTone); }
+                if (_fxColor == null) { _fxColor = ScriptableObject.CreateInstance<ColorAdjustments>(); ForceOverrides(_fxColor); prof.components.Add(_fxColor); }
+
+                _fxVolume = target;
+                _effectsStamp = null;
+                LoggerInstance.Msg($"effects: attached to the game's volume '{target.name}' " +
+                                   $"({prof.components.Count} components, overrides forced on)");
+            }
+            catch (Exception e) { LoggerInstance.Warning("effects volume: " + e.Message); }
+        }
+
         private void ApplyEffects(string why)
         {
             var e = _cfg.effects;
             if (e == null) return;
             try
             {
-                bool wanted = Math.Abs(e.exposure) > 0.001f || Math.Abs(e.contrast) > 0.001f
-                           || Math.Abs(e.saturation) > 0.001f || e.bloom > 0.001f
-                           || (e.tonemapping ?? "none").ToLowerInvariant() != "none";
-                string stamp = $"{wanted}|{e.tonemapping}|{e.bloom:F2}|{e.bloom_threshold:F2}|" +
+                EnsureEffectVolume();
+                if (_fxBloom == null || _fxTone == null || _fxColor == null) return;
+
+                _fxBloom.threshold.value = Mathf.Clamp(e.bloom_threshold, 0f, 4f);
+                _fxBloom.intensity.value = Mathf.Clamp(e.bloom, 0f, 4f);
+                _fxBloom.scatter.value = 0.7f;
+                try { _fxBloom.highQualityFiltering.value = true; } catch { }
+                _fxBloom.active = e.bloom > 0.001f;
+
+                string tm = (e.tonemapping ?? "none").ToLowerInvariant();
+                _fxTone.mode.value = tm == "aces" ? TonemappingMode.ACES
+                                  : tm == "neutral" ? TonemappingMode.Neutral
+                                  : TonemappingMode.None;
+                _fxTone.active = tm != "none";
+
+                _fxColor.postExposure.value = Mathf.Clamp(e.exposure, -5f, 5f);
+                _fxColor.contrast.value = Mathf.Clamp(e.contrast, -100f, 100f);
+                _fxColor.saturation.value = Mathf.Clamp(e.saturation, -100f, 100f);
+                _fxColor.active = Math.Abs(e.exposure) > 0.001f
+                               || Math.Abs(e.contrast) > 0.001f
+                               || Math.Abs(e.saturation) > 0.001f;
+
+                string stamp = $"{e.tonemapping}|{e.bloom:F2}|{e.bloom_threshold:F2}|" +
                                $"{e.exposure:F2}|{e.contrast:F0}|{e.saturation:F0}";
                 if (stamp == _effectsStamp) return;
                 _effectsStamp = stamp;
-                if (!wanted)
-                {
-                    LoggerInstance.Msg($"effects [{why}]: all off (the Visuals tab's grain/aberration/vignette are the ones that work)");
-                    return;
-                }
-                LoggerInstance.Msg($"effects [{why}]: requested tonemapping {e.tonemapping}, bloom {e.bloom:F2} @ " +
+                LoggerInstance.Msg($"effects [{why}]: tonemapping {e.tonemapping}, bloom {e.bloom:F2} @ " +
                                    $"{e.bloom_threshold:F2}, exposure {e.exposure:F2}, contrast {e.contrast:F0}, " +
-                                   $"saturation {e.saturation:F0} - NOT APPLIED: this game's pipeline ignores post " +
-                                   $"components created at runtime (see TODO.md), so these five settings have no effect");
+                                   $"saturation {e.saturation:F0}");
             }
             catch (Exception ex) { LoggerInstance.Warning("effects pass: " + ex.Message); }
         }

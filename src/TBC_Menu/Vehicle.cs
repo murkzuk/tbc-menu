@@ -475,6 +475,20 @@ namespace TbcMenu
             snap.AppliedSpeed = snap.MaxSpeed;
             snap.AppliedTorque = snap.DefaultTorque;
             foreach (var wp in snap.Wheels) { if (wp == null) continue; try { wp.Initialize(); } catch { } }
+
+            // The turret and gun-elevation rates are per-tank too: without these, "clear this tank"
+            // left them at the override and the status line still claimed the game values were back.
+            Transform root = TankRootOf(drive.transform);
+            foreach (var tur in UnityEngine.Object.FindObjectsOfType<Turret_Horizontal_CS>())
+            {
+                if (tur == null || TankRootOf(tur.transform) != root) continue;
+                if (_turretSpeedMag.TryGetValue(tur.GetInstanceID(), out float turOrig)) tur.Speed_Mag = turOrig;
+            }
+            foreach (var cv in UnityEngine.Object.FindObjectsOfType<Cannon_Vertical_CS>())
+            {
+                if (cv == null || TankRootOf(cv.transform) != root) continue;
+                if (_cannonSpeedMag.TryGetValue(cv.GetInstanceID(), out float cvOrig)) cv.Speed_Mag = cvOrig;
+            }
         }
 
         // Puts back what the game had for every spawned tank, so turning the tab off is not a

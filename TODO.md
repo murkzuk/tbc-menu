@@ -1,65 +1,50 @@
 # TODO
 
-## Retired: the Effects tab is gone (1.7.7)
+## Solved: the Effects tab works (1.7.8)
 
-Removed from the menu rather than left there doing nothing. The config keeps its `effects` block (old
-files still load, nothing reads it) and `ApplyEffects` remains as a log-only stub that says plainly
-that these five settings are not applied and why. The finding behind it:
+Three releases went into this and every conclusion was wrong until the last piece was found, so the
+whole trail is kept: it is the most useful thing in this file for anyone touching URP volumes again.
 
-## Answered: the Effects tab cannot work in this game (1.7.6)
+**What was actually wrong - two things at once:**
 
-The tab is now honest instead of broken: it logs what it was asked to do and says plainly that it is
-not applied. Everything below was measured, in this order, and the last three attempts are the
-complete set of reasonable ones.
+1. **`VolumeParameter.overrideState`.** URP ignores any parameter whose override flag is false, and a
+   component built with `ScriptableObject.CreateInstance` starts with every flag false. The components
+   the game ships were authored, so theirs are true - which is exactly why writing *those* (film grain,
+   chromatic aberration, vignette) always worked and writing ours never did, however it was delivered.
+2. **Which profile the pipeline blends.** A `Volume` has `sharedProfile` (the asset) and `profile` (a
+   runtime instance URP clones on first access). In a battle scene the clone is what gets blended, so
+   writing only `sharedProfile` writes into nothing.
 
-**What works:** writing the components the game already ships. Vignette 0.6 turned the corners black
-(corner pixel 121 -> 0) and left the centre alone; film grain and chromatic aberration behave the
-same way. That is the Visuals tab, and it is how the PS1 look is removed.
+**The fix:** append our components to the volume's *runtime* profile instance and call
+`SetAllOverridesTo(true)` on each. Measured in `TBC rolling ground`: exposure +2 raised the mean
+luminance **170.2 -> 222.8**; bloom 1.5 at threshold 0.2 raised it **170.2 -> 204.0**; and driving
+exposure down through the menu row walked it back, 218 -> 79. The tab was removed in 1.7.7 and
+restored in 1.7.8.
 
-**What does not work:** any component the mod *creates*, however it is delivered.
+**Kept from the dead ends, because they are real:**
 
-| attempt | result |
-|---|---|
-| appended to the game's own `VolumeProfile` | logged as present (`components 6`), picture unchanged |
-| a fresh global `Volume` on its own GameObject, layer 0, priority 100, weight 1, created only once `VolumeManager.instance` was live | bloom 2.0 at threshold 0 produced **no glow at all** |
-| a new profile (game's components + ours) swapped onto the game's own `Volume` | still nothing |
+- a `Volume` the mod creates on its own GameObject is ignored by this game's pipeline, even with
+  `isGlobal`, layer 0, priority 100, weight 1 and the manager live (bloom 2.0 at threshold 0: nothing);
+- the battle camera is an ordinary base camera with `post on`, layer 0, volume mask `0x1`, so none of
+  the obvious gates were ever closed;
+- the Effects tab depends on this game's volume setup, so a game update is the most likely thing to
+  break it first.
 
-Two things were learned on the way and are worth keeping:
+## Done: two bugs found reviewing the 1.7.1 diff (1.7.8)
 
-1. A `Volume` has **two** profiles - `sharedProfile` (the asset) and `profile` (a runtime instance
-   URP clones on first access) - and which one the pipeline blends varies. Reading `profile` creates
-   the clone, so writing only `sharedProfile` can be writing into nothing. The mod now writes both
-   (`ProfilesOf`), which is why vignette/grain/CA are reliable.
-2. The battle camera is a normal base camera with post-processing on (`post on/Base`), on layer 0,
-   with a volume mask of `0x1` - so none of the obvious gates were closed.
+**Gun could stay unloaded after the menu closed.** `EnsurePlayerFireBlocked` held cannons down but
+never recorded them, so a gun that appeared after the menu opened (respawn, next mission) was never
+released; and `ReleasePlayerFire` set `Is_Loaded = true` on everything, so a gun that was already
+empty came back loaded. It now records each cannon with the state it had, adds newly-seen ones to that
+list, and releases only those still present and not reloading. Measured:
+`menu open: player gun held unloaded (1 cannon(s), 1 were loaded)` then
+`menu closed: gun released (1 restored, 0 still reloading, 0 gone)`; with the tank destroyed while the
+menu was open the same path reported `0 restored, 0 still reloading, 1 gone`.
 
-Going further means going below the Volume system (patching the game's post-processing scripts, or
-driving its own post volume parameters), which is a research task rather than a fix. The five settings
-exposure, contrast, saturation, bloom and tonemapping are documented as inert.
-
-## Withdrawn: the Effects tab does nothing in a battle scene (found 1.7.5)
-
-Measured, not guessed - and **not fixed**, because the cause is not yet identified:
-
-- at the **title**, exposure +2 visibly washes the picture out;
-- in **TBC rolling ground**, exposure 0 -> +2 changes the mean luminance not at all
-  (147.4 -> 146.6 over a 45x20 sample grid), even though the mod logs
-  `effects [reload]: 1 volume profile(s) - ... exposure 2.00` - so the value really is written;
-- the battle camera itself has post-processing **on** (`Main Camera ... post on`), and
-  `Camera (Background) ... post off` as expected.
-
-So the components are written to a profile that the battle camera does not use, or one it ignores.
-Next candidates, in order, with the instruments now in place:
-
-1. `Volume.isGlobal` / `weight` / `priority` on the volume that was found, and the camera's
-   `volumeLayerMask` - a volume on a layer outside the mask is silently ignored.
-2. `sharedProfile` vs the runtime `profile` instance: the code prefers `sharedProfile`, and the
-   camera may be blending `profile`.
-3. The order of the profile's `components` list when a component is added at runtime.
-
-Instruments added in 1.7.5: an `effects [why]` log line (change-only) naming the volume count and
-every applied value, and `post on/off` per camera in the F8 geometry dump.
-
+**Clear this tank left the turret at the override.** It restored the drive only, while the status line
+claimed the game values were back. `RestoreTankOriginals` now also restores
+`Turret_Horizontal_CS.Speed_Mag` and `Cannon_Vertical_CS.Speed_Mag` for that tank. Measured by dump:
+`speedMag_degps 5.00` before, **35.00** after - the stock T-34/76 rate.
 ## Open: aim at a non-16:9 window (found 1.7.5, geometry only)
 
 At a **1440x1080** window the game letterboxes the 3D camera: `Camera (Main)` comes back with

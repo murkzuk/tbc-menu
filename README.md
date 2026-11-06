@@ -42,8 +42,9 @@ and the traps are in [docs/graphics-notes.md](docs/graphics-notes.md).
 3. Drop `TBC_Menu.dll` into `<game>\Mods\`
 4. Launch. Press **F7** in game.
 
-Config lives at `<game>\UserData\TBC_Menu.json` and is written by **Save settings** in the menu.
-Nothing is written unless you press it.
+Config lives at `<game>\UserData\TBC_Menu.json`. It is written by **Save settings** in the menu,
+by **Alt+S** while nudging a commander seat, and once on first run if the file is missing. Nothing
+else writes it.
 
 ## Uninstall
 
@@ -66,10 +67,8 @@ while the menu is open, and the gun is handed back loaded when it closes. Clicks
 | **Resolution** | window size, fullscreen mode, **Render direct to screen**, internal buffer scale (0 = stock buffer - leave it there, see below), live buffer readout |
 | **Visuals** | film grain, chromatic aberration, vignette, fog density, antialiasing (off/fxaa/smaa/taa), dithering, texture aniso, **commander view** |
 | **Quality** | MSAA 1-8x, main light shadowmap 1024-4096, soft shadow quality, shadow distance, render scale (supersampling) |
+| **Effects** | tonemapping (none/neutral/ACES), bloom + threshold, exposure, contrast, saturation |
 | **Vehicle** | per-tank top speed, turret traverse, gun elevation, acceleration and torque, plus a realism table and a live speed readout |
-
-There is no Effects tab: this game's pipeline ignores post components created at runtime, so exposure,
-bloom and the rest could not be offered honestly. Details in `TODO.md`.
 | **Tuning** | tuning multiplier scales, max tuning levels, AI preset and scales, AI passive, unlock all tanks, points |
 
 **F8** dumps the render/UI geometry to `MelonLoader\Latest.log` (cameras, viewport rects, canvases,
@@ -185,8 +184,9 @@ Two things worth knowing before you tune:
   `Sync_Speed_Rate` is off, and the cached `acceleRate` is refreshed; the mod sets all three when
   `accel_time` is given. That is what stops every tank accelerating like a go-kart. Note it
   disables the game's speed synchronisation for that tank, which has not been tested on hills.
-  `decel_time` works the same way and refreshes its own cached `deceleRate` - it used to be
-  refreshed only when `accel_time` was also set, which made it inert on its own.
+  `decel_time` works the same way: it also turns the ramp on and refreshes its own cached
+  `deceleRate`, so it switches `Sync_Speed_Rate` off for that tank too (it used to be refreshed only
+  when `accel_time` was also set, which made it inert on its own).
 - **Historical turret traverse is slow.** 5 deg/s (T-34/76) means a 30 degree swing takes six
   seconds while the crosshair moves instantly, so the gun visibly trails the reticle. That is
   realism fighting the game's mouse aiming, not a bug - soften the `traverse` values if it bothers
@@ -205,9 +205,16 @@ touches game files.
 
 ## Defaults
 
-Resolution, the visual cleanup and **Render direct to screen** are on; quality is raised (MSAA 8x,
-2048 shadowmap, high soft shadows, 200 m shadow distance, render scale 2); effects, tuning and
-vehicle overrides are **off**.
+Straight from `Config.cs`, so this is what a fresh install starts with:
+
+- **Resolution**: 1920x1080, exclusive fullscreen, **Render direct to screen** on, `internal_scale` 0
+  (the stock buffer is left alone), `fill_window` on (drops the fixed 16:9 letterbox).
+- **Visuals**: film grain, chromatic aberration and vignette **0**, antialiasing **smaa**, dithering on,
+  fog density x1, texture aniso 8x, commander view off.
+- **Quality**: MSAA **1** (off), 1024 shadowmap, pipeline default soft shadows, 128 m shadow distance,
+  render scale 1. The shipped defaults are deliberately conservative; the mod's own config on this
+  machine runs MSAA 8x, 2048, high, 400 m and render scale 2.
+- **Effects**, **Tuning** and **Vehicle overrides**: **off**. Vehicle overrides default to player-only.
 
 ## Compatibility
 
@@ -233,13 +240,12 @@ See [TODO.md](TODO.md) for the backlog and the measured game-vs-real-life data.
   effect immediately.
 - The bypass hides the canvas that displays the buffer. Anything the game draws into that buffer
   other than the 3D view will not appear.
-- **The Effects tab does not work, and cannot be made to work this way.** This game's render pipeline
-  only honours the volume components it ships: writing those (film grain, chromatic aberration,
-  vignette - the Visuals tab) changes the picture, but a component the mod *creates* is ignored
-  however it is delivered (appended to the game's profile, in a fresh global volume, or in a profile
-  swapped onto the game's own volume - all three measured, all three no-ops). Exposure, contrast,
-  saturation, bloom and tonemapping therefore do nothing; the tab logs that plainly. The measurements
-  are in `TODO.md`.
+- **The Effects tab needs two things to work, and 1.7.8 finally has both.** URP ignores a volume
+  parameter whose `overrideState` is false - and a component created by the mod starts with all of
+  them false - and it blends the volume's *runtime* profile instance, not the shared asset. The mod
+  therefore appends its components to that runtime instance and forces every override on. Measured:
+  exposure +2 raised the mean luminance from 170 to 223, bloom 1.5 from 170 to 204. If a future game
+  build changes its volume setup, expect this tab to stop working first.
 - The **Tuning** tab writes into live player data, which the game saves on exit. Back up
   `%USERPROFILE%\AppData\LocalLow\Chobi Softwear\Tank Battle Classic\save.json` before using
   *Unlock all tanks* or *Points*.

@@ -33,6 +33,7 @@ namespace TbcMenu
         // Cannon_Fire_CS.Is_Loaded (it returns before reading the fire key), so that is what is held
         // down here - only on the player's tank, so the AI keeps shooting.
         private readonly List<Cannon_Fire_CS> _mutedFire = new List<Cannon_Fire_CS>();
+        private readonly List<bool> _mutedFireWasLoaded = new List<bool>();
         private int _builtTab = -1;
 
         private class Row
@@ -44,9 +45,7 @@ namespace TbcMenu
             public Func<string> value;
         }
 
-        // No Effects tab: this game's pipeline ignores post components created at runtime, so
-        // exposure/contrast/saturation/bloom/tonemapping cannot be offered honestly. See TODO.md.
-        private static readonly string[] TabNames = { "Resolution", "Visuals", "Quality", "Vehicle", "Tuning" };
+        private static readonly string[] TabNames = { "Resolution", "Visuals", "Quality", "Effects", "Vehicle", "Tuning" };
         private const float PanelX = 40f, PanelY = 50f, PanelW = 780f, RowH = 34f;
         private const float LabelX = 56f, LabelW = 520f, ValueX = 600f, ValueW = 200f;
 
@@ -138,7 +137,8 @@ namespace TbcMenu
             if (_tab == 0) total += RowH * 7f;
             else if (_tab == 1) total += RowH * 20f;
             else if (_tab == 2) total += RowH * 6f;
-            else if (_tab == 3) total += RowH * 19f;
+            else if (_tab == 3) total += RowH * 7f;
+            else if (_tab == 4) total += RowH * 19f;
             else total += RowH * 16f;
             total += RowH * 4f;
             MakeImage(PanelX, PanelY, PanelW, total, new Color(0.02f, 0.02f, 0.05f, 0.95f));
@@ -163,7 +163,8 @@ namespace TbcMenu
             if (_tab == 0) BuildResolutionRows(ref y);
             else if (_tab == 1) BuildVisualRows(ref y);
             else if (_tab == 2) BuildQualityRows(ref y);
-            else if (_tab == 3) BuildVehicleRows(ref y);
+            else if (_tab == 3) BuildEffectRows(ref y);
+            else if (_tab == 4) BuildVehicleRows(ref y);
             else BuildTuningRows(ref y);
 
             y += 8f;
@@ -331,6 +332,17 @@ namespace TbcMenu
         }
 
 
+        private void BuildEffectRows(ref float y)
+        {
+            var e = _cfg.effects;
+            AddChoiceRow(ref y, "Tonemapping", new[] { "none", "neutral", "aces" }, () => e.tonemapping ?? "none", s => { e.tonemapping = s; ApplyEffects("menu"); });
+            AddFloatRow(ref y, "Bloom intensity", () => e.bloom, x => { e.bloom = x; ApplyEffects("menu"); }, 0f, 2f, 0.1f, "F2");
+            AddFloatRow(ref y, "Bloom threshold", () => e.bloom_threshold, x => { e.bloom_threshold = x; ApplyEffects("menu"); }, 0f, 2f, 0.1f, "F2");
+            AddFloatRow(ref y, "Exposure", () => e.exposure, x => { e.exposure = x; ApplyEffects("menu"); }, -2f, 2f, 0.1f, "F2");
+            AddFloatRow(ref y, "Contrast", () => e.contrast, x => { e.contrast = x; ApplyEffects("menu"); }, -50f, 50f, 5f, "F0");
+            AddFloatRow(ref y, "Saturation", () => e.saturation, x => { e.saturation = x; ApplyEffects("menu"); }, -50f, 50f, 5f, "F0");
+        }
+
         private void BuildVehicleRows(ref float y)
         {
             var v = _cfg.vehicle;
@@ -484,6 +496,9 @@ namespace TbcMenu
 
         // Also runs on the 2 s tick: a respawn or a new mission brings a fresh cannon that has to be
         // held down too, and a reload that finished while the menu was open puts Is_Loaded back up.
+        // Re-asserts the block for cannons that appeared since (respawn, next mission) AND records
+        // them, so the release path knows about every gun it held down. Without this a respawned gun
+        // was never released and stayed unloaded.
         private void EnsurePlayerFireBlocked()
         {
             try
@@ -494,7 +509,11 @@ namespace TbcMenu
                 {
                     if (fire == null) continue;
                     if (TankRootOf(fire.transform) != player) continue;   // the AI keeps its guns
-                    if (!fire.Is_Loaded) continue;
+                    if (!_mutedFire.Contains(fire))
+                    {
+                        _mutedFire.Add(fire);
+                        _mutedFireWasLoaded.Add(fire.Is_Loaded);   // remember, do not assume
+                    }
                     fire.Is_Loaded = false;
                 }
             }
@@ -506,28 +525,46 @@ namespace TbcMenu
             Transform player = PlayerTankRoot();
             if (player == null) return;
             _mutedFire.Clear();
+            _mutedFireWasLoaded.Clear();
             foreach (var fire in UnityEngine.Object.FindObjectsOfType<Cannon_Fire_CS>())
             {
                 if (fire == null) continue;
                 if (TankRootOf(fire.transform) != player) continue;
                 _mutedFire.Add(fire);
+                _mutedFireWasLoaded.Add(fire.Is_Loaded);
                 fire.Is_Loaded = false;
             }
             if (_mutedFire.Count > 0)
-                LoggerInstance.Msg($"menu open: player gun held unloaded ({_mutedFire.Count} cannon(s))");
+            {
+                int wereLoaded = 0;
+                foreach (var b in _mutedFireWasLoaded) if (b) wereLoaded++;
+                LoggerInstance.Msg($"menu open: player gun held unloaded ({_mutedFire.Count} cannon(s), " +
+                                   $"{wereLoaded} were loaded)");
+            }
         }
 
+        // Puts back the state each cannon had when it was held down - a gun that was already empty
+        // (no ammo, mid-reload) must not come back loaded, and a gun we did not hold must not be
+        // touched at all. Cannons that vanished with their scene are simply dropped.
         private void ReleasePlayerFire()
         {
-            foreach (var fire in _mutedFire)
+            int released = 0, reloading = 0, gone = 0;
+            for (int i = 0; i < _mutedFire.Count; i++)
             {
-                if (fire == null) continue;
-                bool reloading = false;
-                try { reloading = fire.reloadCoroutine != null; } catch { }
-                if (reloading) continue;                 // let the game finish and set the flag itself
-                try { fire.Is_Loaded = true; } catch { }
+                var fire = _mutedFire[i];
+                if (fire == null) { gone++; continue; }
+                bool wasLoaded = i < _mutedFireWasLoaded.Count && _mutedFireWasLoaded[i];
+                bool busy = false;
+                try { busy = fire.reloadCoroutine != null; } catch { }
+                if (busy) { reloading++; continue; }        // the game will set the flag itself
+                try { fire.Is_Loaded = wasLoaded; } catch { }
+                released++;
             }
+            if (released + reloading + gone > 0)
+                LoggerInstance.Msg($"menu closed: gun released ({released} restored, " +
+                                   $"{reloading} still reloading, {gone} gone)");
             _mutedFire.Clear();
+            _mutedFireWasLoaded.Clear();
         }
     }
 }
