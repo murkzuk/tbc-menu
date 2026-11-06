@@ -1,6 +1,37 @@
 # TODO
 
-## Open: the Effects tab does nothing in a battle scene (found 1.7.5)
+## Answered: the Effects tab cannot work in this game (1.7.6)
+
+The tab is now honest instead of broken: it logs what it was asked to do and says plainly that it is
+not applied. Everything below was measured, in this order, and the last three attempts are the
+complete set of reasonable ones.
+
+**What works:** writing the components the game already ships. Vignette 0.6 turned the corners black
+(corner pixel 121 -> 0) and left the centre alone; film grain and chromatic aberration behave the
+same way. That is the Visuals tab, and it is how the PS1 look is removed.
+
+**What does not work:** any component the mod *creates*, however it is delivered.
+
+| attempt | result |
+|---|---|
+| appended to the game's own `VolumeProfile` | logged as present (`components 6`), picture unchanged |
+| a fresh global `Volume` on its own GameObject, layer 0, priority 100, weight 1, created only once `VolumeManager.instance` was live | bloom 2.0 at threshold 0 produced **no glow at all** |
+| a new profile (game's components + ours) swapped onto the game's own `Volume` | still nothing |
+
+Two things were learned on the way and are worth keeping:
+
+1. A `Volume` has **two** profiles - `sharedProfile` (the asset) and `profile` (a runtime instance
+   URP clones on first access) - and which one the pipeline blends varies. Reading `profile` creates
+   the clone, so writing only `sharedProfile` can be writing into nothing. The mod now writes both
+   (`ProfilesOf`), which is why vignette/grain/CA are reliable.
+2. The battle camera is a normal base camera with post-processing on (`post on/Base`), on layer 0,
+   with a volume mask of `0x1` - so none of the obvious gates were closed.
+
+Going further means going below the Volume system (patching the game's post-processing scripts, or
+driving its own post volume parameters), which is a research task rather than a fix. The five settings
+exposure, contrast, saturation, bloom and tonemapping are documented as inert.
+
+## Withdrawn: the Effects tab does nothing in a battle scene (found 1.7.5)
 
 Measured, not guessed - and **not fixed**, because the cause is not yet identified:
 

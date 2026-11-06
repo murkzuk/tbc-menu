@@ -295,6 +295,23 @@ namespace TbcMenu
             catch (Exception e) { LoggerInstance.Warning("buffer: " + e.Message); }
         }
 
+        // A Volume exposes two profiles: sharedProfile (the asset) and profile (a runtime instance
+        // URP instantiates from it on first access). Which one the pipeline blends is not obvious
+        // from outside, and reading `profile` creates the clone - so write to both and it no longer
+        // matters. Returns one or two distinct profiles.
+        private System.Collections.Generic.List<VolumeProfile> ProfilesOf(Volume vol)
+        {
+            var list = new System.Collections.Generic.List<VolumeProfile>(2);
+            try { var sp = vol.sharedProfile; if (sp != null) list.Add(sp); } catch { }
+            try
+            {
+                var ip = vol.profile;
+                if (ip != null && (list.Count == 0 || ip.GetInstanceID() != list[0].GetInstanceID())) list.Add(ip);
+            }
+            catch { }
+            return list;
+        }
+
         private void ApplyVisuals(string why)
         {
             var v = _cfg.visuals;
@@ -303,17 +320,19 @@ namespace TbcMenu
                 foreach (var vol in Resources.FindObjectsOfTypeAll<Volume>())
                 {
                     if (vol == null) continue;
-                    var prof = vol.sharedProfile != null ? vol.sharedProfile : vol.profile;
-                    if (prof == null || prof.components == null) continue;
-                    foreach (var comp in prof.components)
+                    foreach (var prof in ProfilesOf(vol))
                     {
-                        if (comp == null) continue;
-                        var fg = comp.TryCast<FilmGrain>();
-                        if (fg != null) { fg.intensity.value = Mathf.Clamp01(v.film_grain); fg.active = v.film_grain > 0.001f; continue; }
-                        var ca = comp.TryCast<ChromaticAberration>();
-                        if (ca != null) { ca.intensity.value = Mathf.Clamp01(v.chromatic_aberration); ca.active = v.chromatic_aberration > 0.001f; continue; }
-                        var vig = comp.TryCast<Vignette>();
-                        if (vig != null) { vig.intensity.value = Mathf.Clamp01(v.vignette); vig.active = v.vignette > 0.001f; continue; }
+                        if (prof == null || prof.components == null) continue;
+                        foreach (var comp in prof.components)
+                        {
+                            if (comp == null) continue;
+                            var fg = comp.TryCast<FilmGrain>();
+                            if (fg != null) { fg.intensity.value = Mathf.Clamp01(v.film_grain); fg.active = v.film_grain > 0.001f; continue; }
+                            var ca = comp.TryCast<ChromaticAberration>();
+                            if (ca != null) { ca.intensity.value = Mathf.Clamp01(v.chromatic_aberration); ca.active = v.chromatic_aberration > 0.001f; continue; }
+                            var vig = comp.TryCast<Vignette>();
+                            if (vig != null) { vig.intensity.value = Mathf.Clamp01(v.vignette); vig.active = v.vignette > 0.001f; continue; }
+                        }
                     }
                 }
             }
@@ -687,94 +706,46 @@ namespace TbcMenu
         }
 
 
-        // ---- effects (post components added to the volume profile) ----------
-
-        private class EffectSet
-        {
-            public Bloom bloom;
-            public Tonemapping tone;
-            public ColorAdjustments color;
-        }
-
-        private readonly Dictionary<int, EffectSet> _effectSets = new Dictionary<int, EffectSet>();
+        // ---- post effects (not deliverable in this game - see below) --------
 
         private string _effectsStamp;
 
+        // Measured, exhaustively, in 1.7.5/1.7.6 while trying to make this tab work:
+        //
+        //   * the game's OWN components respond - writing vignette 0.6 turned the corners black
+        //     (corner pixel 121 -> 0) and film grain/CA behave the same way;
+        //   * a component the mod CREATES is ignored, whatever is done with it:
+        //       - appended to the game's VolumeProfile: logged as present, no visual change;
+        //       - in a fresh global Volume (own GameObject, layer 0, priority 100, weight 1,
+        //         VolumeManager live): bloom 2.0 at threshold 0 produced no glow at all;
+        //       - in a new profile swapped onto the game's own Volume: still nothing.
+        //
+        // So this build's pipeline honours only the volume components it ships. Exposure, contrast,
+        // saturation, bloom and tonemapping therefore cannot be added from a mod without going lower
+        // than the Volume system; what the project actually needs - film grain, chromatic aberration
+        // and vignette - is handled in the Visuals tab and works.
         private void ApplyEffects(string why)
         {
             var e = _cfg.effects;
             if (e == null) return;
-            int volumes = 0;
             try
             {
-                foreach (var vol in Resources.FindObjectsOfTypeAll<Volume>())
+                bool wanted = Math.Abs(e.exposure) > 0.001f || Math.Abs(e.contrast) > 0.001f
+                           || Math.Abs(e.saturation) > 0.001f || e.bloom > 0.001f
+                           || (e.tonemapping ?? "none").ToLowerInvariant() != "none";
+                string stamp = $"{wanted}|{e.tonemapping}|{e.bloom:F2}|{e.bloom_threshold:F2}|" +
+                               $"{e.exposure:F2}|{e.contrast:F0}|{e.saturation:F0}";
+                if (stamp == _effectsStamp) return;
+                _effectsStamp = stamp;
+                if (!wanted)
                 {
-                    if (vol == null) continue;
-                    var prof = vol.sharedProfile != null ? vol.sharedProfile : vol.profile;
-                    if (prof == null || prof.components == null) continue;
-
-                    EffectSet set = null;
-                    foreach (var c in prof.components)
-                    {
-                        if (c == null) continue;
-                        if (set == null) set = new EffectSet();
-                        if (set.bloom == null) set.bloom = c.TryCast<Bloom>();
-                        if (set.tone == null) set.tone = c.TryCast<Tonemapping>();
-                        if (set.color == null) set.color = c.TryCast<ColorAdjustments>();
-                    }
-                    if (set == null) set = new EffectSet();
-
-                    if (set.bloom == null)
-                    {
-                        set.bloom = ScriptableObject.CreateInstance<Bloom>();
-                        prof.components.Add(set.bloom);
-                    }
-                    if (set.tone == null)
-                    {
-                        set.tone = ScriptableObject.CreateInstance<Tonemapping>();
-                        prof.components.Add(set.tone);
-                    }
-                    if (set.color == null)
-                    {
-                        set.color = ScriptableObject.CreateInstance<ColorAdjustments>();
-                        prof.components.Add(set.color);
-                    }
-
-                    set.bloom.threshold.value = Mathf.Clamp(e.bloom_threshold, 0f, 4f);
-                    set.bloom.intensity.value = Mathf.Clamp(e.bloom, 0f, 4f);
-                    set.bloom.scatter.value = 0.7f;
-                    try { set.bloom.highQualityFiltering.value = true; } catch { }
-                    set.bloom.active = e.bloom > 0.001f;
-
-                    string tm = (e.tonemapping ?? "none").ToLowerInvariant();
-                    set.tone.mode.value = tm == "aces" ? TonemappingMode.ACES
-                                        : tm == "neutral" ? TonemappingMode.Neutral
-                                        : TonemappingMode.None;
-                    set.tone.active = tm != "none";
-
-                    set.color.postExposure.value = Mathf.Clamp(e.exposure, -5f, 5f);
-                    set.color.contrast.value = Mathf.Clamp(e.contrast, -100f, 100f);
-                    set.color.saturation.value = Mathf.Clamp(e.saturation, -100f, 100f);
-                    set.color.active = Math.Abs(e.exposure) > 0.001f
-                                    || Math.Abs(e.contrast) > 0.001f
-                                    || Math.Abs(e.saturation) > 0.001f;
-                    // No break: which volume comes first differs per scene, and applying the
-                    // components to only that one made the Effects tab work in some scenes and
-                    // silently do nothing in others (measured: exposure +2 washed out one title
-                    // scene and changed nothing in the next).
-                    volumes++;
+                    LoggerInstance.Msg($"effects [{why}]: all off (the Visuals tab's grain/aberration/vignette are the ones that work)");
+                    return;
                 }
-
-                // One line when the settings change, so "did the tab do anything?" is answerable
-                // from the log instead of by eye.
-                string stamp = $"{e.tonemapping}|{e.bloom:F2}|{e.bloom_threshold:F2}|{e.exposure:F2}|{e.contrast:F0}|{e.saturation:F0}|{volumes}";
-                if (stamp != _effectsStamp)
-                {
-                    _effectsStamp = stamp;
-                    LoggerInstance.Msg($"effects [{why}]: {volumes} volume profile(s) - tonemapping {e.tonemapping}, " +
-                                       $"bloom {e.bloom:F2} @ {e.bloom_threshold:F2}, exposure {e.exposure:F2}, " +
-                                       $"contrast {e.contrast:F0}, saturation {e.saturation:F0}");
-                }
+                LoggerInstance.Msg($"effects [{why}]: requested tonemapping {e.tonemapping}, bloom {e.bloom:F2} @ " +
+                                   $"{e.bloom_threshold:F2}, exposure {e.exposure:F2}, contrast {e.contrast:F0}, " +
+                                   $"saturation {e.saturation:F0} - NOT APPLIED: this game's pipeline ignores post " +
+                                   $"components created at runtime (see TODO.md), so these five settings have no effect");
             }
             catch (Exception ex) { LoggerInstance.Warning("effects pass: " + ex.Message); }
         }

@@ -51,7 +51,8 @@ namespace TbcMenu
                     try
                     {
                         var ud = cam.GetUniversalAdditionalCameraData();
-                        post = ud == null ? "none" : (ud.renderPostProcessing ? "on" : "off");
+                        post = ud == null ? "none"
+                             : (ud.renderPostProcessing ? "on" : "off") + "/" + ud.renderType;
                     }
                     catch { }
                     var pr = cam.pixelRect;

@@ -231,8 +231,13 @@ See [TODO.md](TODO.md) for the backlog and the measured game-vs-real-life data.
   effect immediately.
 - The bypass hides the canvas that displays the buffer. Anything the game draws into that buffer
   other than the 3D view will not appear.
-- Effects are added to the scene's volume profile at runtime. If the game ever ships its own
-  Bloom/Tonemapping components, the mod will use those instead of creating new ones.
+- **The Effects tab does not work, and cannot be made to work this way.** This game's render pipeline
+  only honours the volume components it ships: writing those (film grain, chromatic aberration,
+  vignette - the Visuals tab) changes the picture, but a component the mod *creates* is ignored
+  however it is delivered (appended to the game's profile, in a fresh global volume, or in a profile
+  swapped onto the game's own volume - all three measured, all three no-ops). Exposure, contrast,
+  saturation, bloom and tonemapping therefore do nothing; the tab logs that plainly. The measurements
+  are in `TODO.md`.
 - The **Tuning** tab writes into live player data, which the game saves on exit. Back up
   `%USERPROFILE%\AppData\LocalLow\Chobi Softwear\Tank Battle Classic\save.json` before using
   *Unlock all tanks* or *Points*.
