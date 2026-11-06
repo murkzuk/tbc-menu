@@ -1,9 +1,9 @@
 # Handover
 
-Everything needed to pick this up cold. Mod version **1.7.2** (native-resolution rendering in every
-camera mode, plus the menu and buffer clean-up - the 1.7.2 commit, see `git log`). Two installed
-custom scenarios. Read this, then `README.md`, `TODO.md`, `docs/vehicle-model.md` and
-`docs/terrain-and-scenarios.md`.
+Everything needed to pick this up cold. Mod version **1.7.3** (native-resolution rendering in every
+camera mode, the menu and buffer clean-up, and a Tuning tab that undoes itself - the 1.7.3 commit,
+see `git log`). Two installed custom scenarios. Read this, then `README.md`, `TODO.md`,
+`docs/vehicle-model.md` and `docs/terrain-and-scenarios.md`.
 
 ## The two repos
 
@@ -175,8 +175,8 @@ drive flags) and `MelonLoader\Latest.log` - are usually faster than eyeballing a
 
 ## Where it stands right now
 
-- Repo clean, pushed, MIT, credited to murkzuk with the DeepSeek build note. `dist\TBC_Menu-1.7.2.zip`.
-- Installed: `<game>\Mods\TBC_Menu.dll` 1.7.2 (`754B4DA7...`), hash-identical to the build. `version.dll` is back
+- Repo clean, pushed, MIT, credited to murkzuk with the DeepSeek build note. `dist\TBC_Menu-1.7.3.zip`.
+- Installed: `<game>\Mods\TBC_Menu.dll` 1.7.3 (`84B1C27D...`), hash-identical to the build. `version.dll` is back
   in place (MelonLoader active).
 - User config: `Render direct to screen` on, `internal_scale` 0, MSAA 8, render scale 2, shadow
   distance 400, seven per-tank vehicle entries, `player_only: true`.
@@ -189,6 +189,12 @@ drive flags) and `MelonLoader\Latest.log` - are usually faster than eyeballing a
 Both items that were open at the 1.7.0 handover have been measured and closed, and 1.7.2 closed the
 first of the follow-ups:
 
+- **1.7.3 - the Tuning tab is reversible.** Unticking it now restores the six multiplier arrays, the
+  live AI settings and the passive flag, and the multiplier indices it may have overwritten; before,
+  all of it latched (the arrays especially, since they are copied into every vehicle at spawn).
+  Measured from the log with attack/drive/reload 1.5 and preset `ace`: applied `drive 1.800 /
+  lead 2.025 / passive on`, restored `drive 1.200 / lead 1.500 / passive off`. *Dump vehicle values*
+  gained an `ai:` block on the way.
 - **1.7.2 - the buffer is identified by the canvas that displays it**, so a briefing screen can no
   longer mistake its 256x256 minimap for the 854x480 view buffer. In the same release: fog returns
   to the game value at scale 1.0 (it used to stick), *Reload from disk* rebuilds the menu instead of
@@ -211,20 +217,19 @@ first of the follow-ups:
 
 ## Open items, in the order they matter
 
-1. **Tuning does not undo itself** - `ApplyTuningRuntime` returns early when the tab is disabled, so
-   the six scaled `Tuning_Value` arrays and every snapped AI value stay modified, and
-   `ai.No_Attack` is forced to `false` on every AI every 2 s instead of being left alone.
-2. **Terrain: iterate on the half-height version** - it is at ~1.2 deg mean slope now; if it reads too
+1. **Terrain: iterate on the half-height version** - it is at ~1.2 deg mean slope now; if it reads too
    flat, the way to keep the height while restoring hill character is shorter wavelengths (ridged
    noise), not more amplitude.
-3. **Vehicle overrides have four known defects** - torque is scaled from the slope-limited `Torque`
+2. **Vehicle overrides have four known defects** - torque is scaled from the slope-limited `Torque`
    instead of `defaultTorque` (the dump shows `2799.9` vs `3000.0`), `deceleRate` is only refreshed
    when `accel_time` is set, *Clear this tank* leaves the acceleration ramp behind, and *Load realism
    table* replaces whole entries so `elevation`/`torque_scale`/`decel_time` are lost. Also open: 12 of
    the 19 tank keys are still guesses - one dump session settles it.
-4. **Non-16:9 aiming** - `Fixed_Aspect_Camera_CS` letterboxes to 1.7778, so the aim constants may
+3. **Non-16:9 aiming** - `Fixed_Aspect_Camera_CS` letterboxes to 1.7778, so the aim constants may
    need the camera rect rather than the screen size; untested at 21:9 and 4:3.
-5. **Torque on slopes** is still unmeasured (`torque_scale` only shows on gradients).
+4. **Torque on slopes** is still unmeasured (`torque_scale` only shows on gradients).
+5. **Dead AI knob** - `ai_visibility_scale` multiplies `Extended_Visibility`, which is **0** on this
+   game's vehicles, so it does nothing. Find the field the AI actually spots with, or drop the knob.
 6. **Backlog**: `cost_scale` and `allow_manual_respawn` (lost in an earlier consolidation), the two
    AI knobs that exist in config but have no menu row, AI deceleration (dumps show 0.01 s, i.e. AI
    tanks stop instantly).

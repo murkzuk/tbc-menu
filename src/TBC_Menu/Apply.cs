@@ -377,13 +377,124 @@ namespace TbcMenu
             catch (Exception e) { LoggerInstance.Warning("fog: " + e.Message); }
         }
 
+        // Tuning is a one-way door unless it is undone. Everything it writes outlives the switch:
+        // the six Tuning_Value arrays are static and get copied into each vehicle at spawn by
+        // Special_Settings_CS, the AI fields are live, and No_Attack latches. So this runs on the
+        // transition rather than on every tick: apply while enabled, restore once when it goes off.
         private void ApplyTuningRuntime(string why)
         {
-            if (_cfg.tuning == null || !_cfg.tuning.enabled) return;
-            ApplyTuningArrays();
-            ApplyAiOverrides();
-            if (_cfg.tuning.max_levels) ApplyMaxLevels();
-            ApplyRoster();
+            var t = _cfg.tuning;
+            if (t == null) return;
+            if (t.enabled)
+            {
+                bool first = !_tuningApplied;
+                _tuningApplied = true;
+                ApplyTuningArrays();
+                ApplyAiOverrides();
+                if (t.max_levels) ApplyMaxLevels();
+                ApplyRoster();
+                if (first) LogTuningState("applied");   // once per transition, not every 2 s
+            }
+            else if (_tuningApplied)
+            {
+                RestoreTuning();
+            }
+        }
+
+        // Puts back everything ApplyTuningRuntime wrote: the arrays (from the originals cached on
+        // first use), the AI settings, and the player's tuning multiplier indices.
+        private void RestoreTuning()
+        {
+            int aiCount = 0, indexCount = 0;
+            try
+            {
+                RestoreTuningArrays();
+
+                foreach (var ai in UnityEngine.Object.FindObjectsOfType<AI_Settings_CS>())
+                {
+                    if (ai == null) continue;
+                    if (!_aiSnaps.TryGetValue(ai.GetInstanceID(), out var s) || s == null) continue;
+                    ai.Max_Lead_Multiplier = s.Lead;
+                    ai.OpenFire_Distance = s.OpenFire;
+                    ai.Extended_Visibility = s.Visibility;
+                    ai.Combat_Speed_Rate = s.CombatSpeed;
+                    ai.No_Attack = s.NoAttack;
+                    aiCount++;
+                }
+
+                foreach (var p in UnityEngine.Object.FindObjectsOfType<Drive_Control_Input_01_Player_CS>())
+                {
+                    if (p == null) continue;
+                    var sp = p.GetComponentInParent<Special_Settings_CS>();
+                    if (sp == null) continue;
+                    if (!_spIndexSnaps.TryGetValue(sp.GetInstanceID(), out var idx) || idx == null || idx.Length < 6) continue;
+                    sp.Attack_Multiplier_Index = idx[0];
+                    sp.Defence_Multiplier_Index = idx[1];
+                    sp.Drive_Speed_Multiplier_Index = idx[2];
+                    sp.Turret_Speed_Multiplier_Index = idx[3];
+                    sp.Reload_Speed_Multiplier_Index = idx[4];
+                    sp.Bullet_Speed_Multiplier_Index = idx[5];
+                    indexCount++;
+                }
+            }
+            catch (Exception e) { LoggerInstance.Warning("tuning restore: " + e.Message); }
+
+            LogTuningState("restored");
+            LoggerInstance.Msg($"tuning off: {_floatOriginals.Count} multiplier array(s), " +
+                               $"{aiCount} AI setting(s){(indexCount > 0 ? ", " + indexCount + " tank index set(s)" : "")} restored");
+            _aiSnaps.Clear();
+            _spIndexSnaps.Clear();
+            _tuningApplied = false;
+        }
+
+        // So "did the toggle really move anything, and did it put it back?" is answerable from the
+        // log alone: one line for the multiplier arrays, one per AI.
+        private void LogTuningState(string tag)
+        {
+            try
+            {
+                LoggerInstance.Msg($"tuning [{tag}] multipliers["+1+"]: " +
+                                   $"attack {SampleOf(() => Tuning_Value.Attack_Multipliers):F3}, " +
+                                   $"defence {SampleOf(() => Tuning_Value.Defence_Multipliers):F3}, " +
+                                   $"drive {SampleOf(() => Tuning_Value.Drive_Speed_Multipliers):F3}, " +
+                                   $"turret {SampleOf(() => Tuning_Value.Turret_Speed_Multipliers):F3}, " +
+                                   $"reload {SampleOf(() => Tuning_Value.Reload_Speed_Multipliers):F3}, " +
+                                   $"bullet {SampleOf(() => Tuning_Value.Bullet_Speed_Multipliers):F3}");
+            }
+            catch (Exception e) { LoggerInstance.Warning("tuning state: " + e.Message); }
+            try
+            {
+                foreach (var ai in UnityEngine.Object.FindObjectsOfType<AI_Settings_CS>())
+                {
+                    if (ai == null) continue;
+                    string nm = "?";
+                    try { nm = TankNameOf(ai.transform); } catch { }
+                    LoggerInstance.Msg($"ai '{nm}' [{tag}]: lead {ai.Max_Lead_Multiplier:F3}, " +
+                                       $"openFire {ai.OpenFire_Distance:F1}, visibility {ai.Extended_Visibility:F2}, " +
+                                       $"combatSpeed {ai.Combat_Speed_Rate:F3}, passive {(ai.No_Attack ? "on" : "off")}");
+                }
+            }
+            catch (Exception e) { LoggerInstance.Warning("ai state: " + e.Message); }
+        }
+
+        // Element 1 of a multiplier table: the first non-trivial step, and enough to tell a scaled
+        // table from a restored one in the log.
+        private static float SampleOf(Func<Il2CppStructArray<float>> get)
+        {
+            try
+            {
+                var a = get();
+                if (a == null || a.Length == 0) return 0f;
+                return a.Length > 1 ? a[1] : a[0];
+            }
+            catch { return 0f; }
+        }
+
+        // A new scene brings new tanks and new AIs; the old snapshots belong to destroyed objects.
+        private void ResetTuningSnaps()
+        {
+            _aiSnaps.Clear();
+            _spIndexSnaps.Clear();
         }
 
         private void ApplyTuningArrays()
@@ -395,6 +506,18 @@ namespace TbcMenu
             ScaleArr("turret", () => Tuning_Value.Turret_Speed_Multipliers, t.turret);
             ScaleArr("reload", () => Tuning_Value.Reload_Speed_Multipliers, t.reload);
             ScaleArr("bullet", () => Tuning_Value.Bullet_Speed_Multipliers, t.bullet);
+        }
+
+        // Writing the cached originals back with a factor of 1 is the restore: same accessors, so
+        // there is no second list of array names to keep in step.
+        private void RestoreTuningArrays()
+        {
+            ScaleArr("attack", () => Tuning_Value.Attack_Multipliers, 1f);
+            ScaleArr("defence", () => Tuning_Value.Defence_Multipliers, 1f);
+            ScaleArr("drive", () => Tuning_Value.Drive_Speed_Multipliers, 1f);
+            ScaleArr("turret", () => Tuning_Value.Turret_Speed_Multipliers, 1f);
+            ScaleArr("reload", () => Tuning_Value.Reload_Speed_Multipliers, 1f);
+            ScaleArr("bullet", () => Tuning_Value.Bullet_Speed_Multipliers, 1f);
         }
 
         private void ScaleArr(string key, Func<Il2CppStructArray<float>> get, float scale)
@@ -432,14 +555,23 @@ namespace TbcMenu
                     int id = ai.GetInstanceID();
                     if (!_aiSnaps.TryGetValue(id, out var s))
                     {
-                        s = new AiSnap { Lead = ai.Max_Lead_Multiplier, OpenFire = ai.OpenFire_Distance, Visibility = ai.Extended_Visibility, CombatSpeed = ai.Combat_Speed_Rate };
+                        s = new AiSnap
+                        {
+                            Lead = ai.Max_Lead_Multiplier,
+                            OpenFire = ai.OpenFire_Distance,
+                            Visibility = ai.Extended_Visibility,
+                            CombatSpeed = ai.Combat_Speed_Rate,
+                            NoAttack = ai.No_Attack,
+                        };
                         _aiSnaps[id] = s;
                     }
                     ai.Max_Lead_Multiplier = s.Lead * pLead * t.ai_lead_scale;
                     ai.OpenFire_Distance = s.OpenFire * pDist * t.ai_open_fire_scale;
                     ai.Extended_Visibility = s.Visibility * pVis * t.ai_visibility_scale;
                     ai.Combat_Speed_Rate = s.CombatSpeed * pSpd * t.ai_combat_speed_scale;
-                    ai.No_Attack = t.ai_no_attack;
+                    // OR, not assignment: the mod may make an AI passive, but it must never
+                    // un-passify one the game (or another mod) had already silenced.
+                    ai.No_Attack = t.ai_no_attack || s.NoAttack;
                 }
             }
             catch (Exception e) { LoggerInstance.Warning("ai: " + e.Message); }
@@ -454,6 +586,16 @@ namespace TbcMenu
                     if (p == null) continue;
                     var sp = p.GetComponentInParent<Special_Settings_CS>();
                     if (sp == null) continue;
+                    int spId = sp.GetInstanceID();
+                    if (!_spIndexSnaps.ContainsKey(spId))
+                    {
+                        _spIndexSnaps[spId] = new int[]
+                        {
+                            sp.Attack_Multiplier_Index, sp.Defence_Multiplier_Index,
+                            sp.Drive_Speed_Multiplier_Index, sp.Turret_Speed_Multiplier_Index,
+                            sp.Reload_Speed_Multiplier_Index, sp.Bullet_Speed_Multiplier_Index,
+                        };
+                    }
                     sp.Attack_Multiplier_Index = Steps(Tuning_Value.Attack_Multipliers);
                     sp.Defence_Multiplier_Index = Steps(Tuning_Value.Defence_Multipliers);
                     sp.Drive_Speed_Multiplier_Index = Steps(Tuning_Value.Drive_Speed_Multipliers);

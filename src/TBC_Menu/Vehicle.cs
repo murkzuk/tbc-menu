@@ -123,6 +123,24 @@ namespace TbcMenu
                                   ", maxDepression_deg: " + cv.Max_Depression.ToString("F1") + " }");
                 }
 
+                // AI settings: the Tuning tab writes these live, so they need to be readable to
+                // prove that switching the tab off puts them back.
+                var aiRows = new List<string>();
+                try
+                {
+                    foreach (var ai in UnityEngine.Object.FindObjectsOfType<AI_Settings_CS>())
+                    {
+                        if (ai == null) continue;
+                        aiRows.Add("  { tank: \"" + TankNameOf(ai.transform) + "\", kind: \"ai\", lead_multiplier: " +
+                                  ai.Max_Lead_Multiplier.ToString("F3") +
+                                  ", open_fire_dist: " + ai.OpenFire_Distance.ToString("F2") +
+                                  ", extended_visibility: " + ai.Extended_Visibility.ToString("F2") +
+                                  ", combat_speed_rate: " + ai.Combat_Speed_Rate.ToString("F3") +
+                                  ", no_attack: " + (ai.No_Attack ? "on" : "off") + " }");
+                    }
+                }
+                catch { }
+
                 // every vehicle the build knows about, with the exact Tank_Name key the
                 // per-tank table needs - available outside a mission too.
                 var typeRows = new List<string>();
@@ -144,6 +162,7 @@ namespace TbcMenu
                 string json = "{\n  scene: \"" + scene + "\",\n" +
                               "  note: \"speeds in metres per second (1 unit = 1 m assumed); traverse and elevation in degrees per second\",\n" +
                               "  entries: [\n" + string.Join(",\n", driveRows) + "\n  ],\n" +
+                              "  ai: [\n" + string.Join(",\n", aiRows) + "\n  ],\n" +
                               "  tankTypes: [\n" + string.Join(",\n", typeRows) + "\n  ]\n}\n";
                 string path = Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "TBC_Vehicles.json");
                 File.WriteAllText(path, json);

@@ -230,6 +230,12 @@ See [TODO.md](TODO.md) for the backlog and the measured game-vs-real-life data.
 - The **Tuning** tab writes into live player data, which the game saves on exit. Back up
   `%USERPROFILE%\AppData\LocalLow\Chobi Softwear\Tank Battle Classic\save.json` before using
   *Unlock all tanks* or *Points*.
+- The Tuning **multiplier scales** are applied to the game's static tables, which are copied into
+  each vehicle when it spawns - so they bite on the next spawn, not on the tank you are driving.
+  The AI settings and *AI passive* act immediately. Since 1.7.3 switching the tab off puts every
+  one of them back (the scales, the AI values and the passive flag), so the toggle is reversible.
+  Note that `ai_visibility_scale` multiplies a field the game leaves at **0** on these maps, so
+  that knob currently has nothing to act on.
 
 ## Building
 

@@ -13,7 +13,7 @@ using UnityEngine.UI;
 using Il2CppChobiAssets.PTM;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 
-[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.7.2", "murkzuk")]
+[assembly: MelonInfo(typeof(TbcMenu.MenuMod), "TBC Menu", "1.7.3", "murkzuk")]
 [assembly: MelonAdditionalCredits("Built by DeepSeek at murkzuk's request")]
 [assembly: MelonGame(null, null)]
 
@@ -34,12 +34,15 @@ namespace TbcMenu
         private readonly Dictionary<int, float> _fogOriginal = new Dictionary<int, float>();
         private readonly HashSet<int> _assetsDone = new HashSet<int>();
         private readonly Dictionary<int, AiSnap> _aiSnaps = new Dictionary<int, AiSnap>();
+        private readonly Dictionary<int, int[]> _spIndexSnaps = new Dictionary<int, int[]>();
+        private bool _tuningApplied;
         private float _nextTick;
         private string _status = "";
 
         private class AiSnap
         {
             public float Lead, OpenFire, Visibility, CombatSpeed;
+            public bool NoAttack;
         }
 
 
@@ -63,6 +66,7 @@ namespace TbcMenu
             OnSceneChangedCommander(); // scene objects are gone; the request survives if it was open
             ResetBufferTracking();     // new scene, new buffer, new cameras
             ResetVehicleSnaps();       // new tanks, new first-seen values
+            ResetTuningSnaps();        // new AIs, new first-seen values
             ResetDiag();               // fresh three dumps for each scene
             // A new scene brings new fire/camera scripts and the old ones died with the old scene:
             // re-suspend against the new ones, or the menu stays open over a live gun.

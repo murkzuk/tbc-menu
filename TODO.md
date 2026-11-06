@@ -1,5 +1,41 @@
 # TODO
 
+## Done: the Tuning tab undoes itself (1.7.3)
+
+Unticking **Enable tuning** used to leave three one-way doors behind, because
+`ApplyTuningRuntime` simply returned early when the tab was off:
+
+- the six static `Tuning_Value` multiplier arrays stayed scaled, and `Special_Settings_CS` copies
+  those into every vehicle **at spawn**, so the tab kept acting on every tank that appeared later
+  even though it looked inert;
+- the live `AI_Settings_CS` fields (lead, open-fire distance, visibility, combat speed) stayed at
+  their last written values;
+- `ai.No_Attack` was assigned (not OR-ed) on every AI every 2 s, so **AI passive** was irreversible -
+  tick it, untick the tab, and every AI stayed silent for the rest of the session.
+
+1.7.3 makes it a transition: apply while enabled, **restore once when it goes off**. The restore
+writes the cached array originals back (through the same accessors, so there is no second list of
+array names to keep in step), puts every snapped AI field back including `No_Attack`, and restores
+the six tuning multiplier indices it may have overwritten. The passive flag is now `ai_no_attack ||
+snapshot`, so the mod can make an AI passive but can never un-passify one the game silenced. AI
+snapshots are cleared per scene like the vehicle snapshots.
+
+Measured from `Latest.log`, in `TBC rolling ground` with attack/drive/reload 1.5, preset `ace`,
+AI passive on:
+
+    tuning [applied] multipliers[1]: attack 1.800, defence 1.200, drive 1.800, turret 1.500, reload 2.250, bullet 1.500
+    ai 'Pz. III N' [applied]: lead 2.025, openFire 240.0, visibility 0.00, combatSpeed 1.100, passive on
+    tuning [restored] multipliers[1]: attack 1.200, defence 1.200, drive 1.200, turret 1.500, reload 1.500, bullet 1.500
+    ai 'Pz. III N' [restored]: lead 1.500, openFire 200.0, visibility 0.00, combatSpeed 1.000, passive off
+    tuning off: 6 multiplier array(s), 1 AI setting(s) restored
+
+New instrument: `Dump vehicle values` now also writes an `ai:` block (lead, open fire distance,
+extended visibility, combat speed, passive) to `UserData\TBC_Vehicles.json`.
+
+**Side finding:** `Extended_Visibility` is **0** on this game's vehicles, so `ai_visibility_scale`
+multiplies zero and does nothing. Either find the field the AI actually uses for spotting or drop
+the knob.
+
 ## Done: menu and buffer clean-up (1.7.2)
 
 Five fixes, each verified in game rather than reasoned about:
