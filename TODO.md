@@ -53,8 +53,28 @@ the aim constants to 1440x1080 (the screen). So the constants are no longer equa
 drawn into. Whether that moves the shot is **not measured** - no round was fired at that aspect - and
 it cannot affect a 16:9 window, where the two are equal.
 
-Next step: at 4:3, fire at a known object and compare the impact with the reticle. If it is off, the
-fix is to take the constants from the main 3D camera's `pixelRect` rather than from `Screen`.
+Next step: at 4:3, fire at a known object and compare the impact with the reticle - and disassemble
+`Aiming_Control_CS.Cast_Ray_Free` first rather than guessing, since a letterboxed view may need the
+`pixelRect` **offset** (0,135) as well as its size. A cheaper alternative is the dead `fill_window`
+config key: forcing the camera rect to the full screen removes the letterbox at the cost of a
+field-of-view change. 16:9 is unaffected either way.
+
+## Open: multiplier indices survive turning "Max tuning levels" off (review finding)
+
+With Tuning still enabled, switching **Max tuning levels** off never puts the six
+`Special_Settings_CS.*_Multiplier_Index` values back - they stay at the maximum. A guarded branch
+was written for it and then withdrawn, because in the test mission `ApplyMaxLevels` found no
+`Drive_Control_Input_01_Player_CS` owning a `Special_Settings_CS` to snapshot, so there was nothing
+to restore and therefore nothing to measure. Re-do it in a mission where that pairing exists, then
+verify from the log rather than by assumption.
+
+## Not changed, on purpose: the `FindBuffer` fallbacks (review finding)
+
+The looser fallbacks (any RawImage with a RenderTexture at least 512 px wide, then any camera
+targeting one that size) already run **only** when no `Canvas (Main RT)` is found, so the "any large
+RenderTexture" risk the review worried about is gated. The one gap left is a canvas that exists but
+has no RawImage texture yet during a load, where the fallback can win for a frame; the reference is
+re-acquired twice a second, so it self-corrects.
 
 ## Done: the four vehicle-override defects, and the tank keys settled (1.7.4)
 
