@@ -1,5 +1,39 @@
 # TODO
 
+## Open: the Effects tab does nothing in a battle scene (found 1.7.5)
+
+Measured, not guessed - and **not fixed**, because the cause is not yet identified:
+
+- at the **title**, exposure +2 visibly washes the picture out;
+- in **TBC rolling ground**, exposure 0 -> +2 changes the mean luminance not at all
+  (147.4 -> 146.6 over a 45x20 sample grid), even though the mod logs
+  `effects [reload]: 1 volume profile(s) - ... exposure 2.00` - so the value really is written;
+- the battle camera itself has post-processing **on** (`Main Camera ... post on`), and
+  `Camera (Background) ... post off` as expected.
+
+So the components are written to a profile that the battle camera does not use, or one it ignores.
+Next candidates, in order, with the instruments now in place:
+
+1. `Volume.isGlobal` / `weight` / `priority` on the volume that was found, and the camera's
+   `volumeLayerMask` - a volume on a layer outside the mask is silently ignored.
+2. `sharedProfile` vs the runtime `profile` instance: the code prefers `sharedProfile`, and the
+   camera may be blending `profile`.
+3. The order of the profile's `components` list when a component is added at runtime.
+
+Instruments added in 1.7.5: an `effects [why]` log line (change-only) naming the volume count and
+every applied value, and `post on/off` per camera in the F8 geometry dump.
+
+## Open: aim at a non-16:9 window (found 1.7.5, geometry only)
+
+At a **1440x1080** window the game letterboxes the 3D camera: `Camera (Main)` comes back with
+`rect 0,0.125,1,0.750` / `pixelRect 0,135,1440,810` inside a 1440x1080 screen, while the mod sets
+the aim constants to 1440x1080 (the screen). So the constants are no longer equal to the area actually
+drawn into. Whether that moves the shot is **not measured** - no round was fired at that aspect - and
+it cannot affect a 16:9 window, where the two are equal.
+
+Next step: at 4:3, fire at a known object and compare the impact with the reticle. If it is off, the
+fix is to take the constants from the main 3D camera's `pixelRect` rather than from `Screen`.
+
 ## Done: the four vehicle-override defects, and the tank keys settled (1.7.4)
 
 Each defect was verified by dump, not by reading the code:

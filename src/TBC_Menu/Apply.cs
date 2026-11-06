@@ -698,10 +698,13 @@ namespace TbcMenu
 
         private readonly Dictionary<int, EffectSet> _effectSets = new Dictionary<int, EffectSet>();
 
+        private string _effectsStamp;
+
         private void ApplyEffects(string why)
         {
             var e = _cfg.effects;
             if (e == null) return;
+            int volumes = 0;
             try
             {
                 foreach (var vol in Resources.FindObjectsOfTypeAll<Volume>())
@@ -755,7 +758,22 @@ namespace TbcMenu
                     set.color.active = Math.Abs(e.exposure) > 0.001f
                                     || Math.Abs(e.contrast) > 0.001f
                                     || Math.Abs(e.saturation) > 0.001f;
-                    break;   // first volume is enough; profiles are shared per scene
+                    // No break: which volume comes first differs per scene, and applying the
+                    // components to only that one made the Effects tab work in some scenes and
+                    // silently do nothing in others (measured: exposure +2 washed out one title
+                    // scene and changed nothing in the next).
+                    volumes++;
+                }
+
+                // One line when the settings change, so "did the tab do anything?" is answerable
+                // from the log instead of by eye.
+                string stamp = $"{e.tonemapping}|{e.bloom:F2}|{e.bloom_threshold:F2}|{e.exposure:F2}|{e.contrast:F0}|{e.saturation:F0}|{volumes}";
+                if (stamp != _effectsStamp)
+                {
+                    _effectsStamp = stamp;
+                    LoggerInstance.Msg($"effects [{why}]: {volumes} volume profile(s) - tonemapping {e.tonemapping}, " +
+                                       $"bloom {e.bloom:F2} @ {e.bloom_threshold:F2}, exposure {e.exposure:F2}, " +
+                                       $"contrast {e.contrast:F0}, saturation {e.saturation:F0}");
                 }
             }
             catch (Exception ex) { LoggerInstance.Warning("effects pass: " + ex.Message); }

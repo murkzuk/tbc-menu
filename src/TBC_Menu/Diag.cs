@@ -3,6 +3,7 @@ using System;
 using MelonLoader;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Rendering.Universal;
 using Il2CppChobiAssets.PTM;
 
 namespace TbcMenu
@@ -46,9 +47,16 @@ namespace TbcMenu
                 {
                     if (cam == null) continue;
                     string tgt = cam.targetTexture == null ? "screen" : (cam.targetTexture.width + "x" + cam.targetTexture.height);
+                    string post = "?";
+                    try
+                    {
+                        var ud = cam.GetUniversalAdditionalCameraData();
+                        post = ud == null ? "none" : (ud.renderPostProcessing ? "on" : "off");
+                    }
+                    catch { }
                     var pr = cam.pixelRect;
                     var r = cam.rect;
-                    sb.AppendLine($"camera '{cam.name}' depth {cam.depth} target {tgt} fov {cam.fieldOfView:F1} " +
+                    sb.AppendLine($"camera '{cam.name}' depth {cam.depth} target {tgt} post {post} fov {cam.fieldOfView:F1} " +
                                   $"rect {r.x:F3},{r.y:F3},{r.width:F3},{r.height:F3} " +
                                   $"pixelRect {pr.x:F0},{pr.y:F0},{pr.width:F0},{pr.height:F0}");
                 }

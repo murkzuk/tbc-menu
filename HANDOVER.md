@@ -1,9 +1,9 @@
 # Handover
 
-Everything needed to pick this up cold. Mod version **1.7.4** (native-resolution rendering in every
-camera mode, the menu and buffer clean-up, a Tuning tab that undoes itself, and the four
-vehicle-override fixes - the 1.7.4 commit, see `git log`). Two installed custom scenarios. Read
-this, then `README.md`, `TODO.md`, `docs/vehicle-model.md` and `docs/terrain-and-scenarios.md`.
+Everything needed to pick this up cold. Mod version **1.7.5** (native-resolution rendering in every
+camera mode, the menu and buffer clean-up, a Tuning tab that undoes itself, the four vehicle-override
+fixes, plus effect diagnostics - the 1.7.5 commit, see `git log`). Two installed custom scenarios.
+Read this, then `README.md`, `TODO.md`, `docs/vehicle-model.md` and `docs/terrain-and-scenarios.md`.
 
 ## The two repos
 
@@ -175,8 +175,8 @@ drive flags) and `MelonLoader\Latest.log` - are usually faster than eyeballing a
 
 ## Where it stands right now
 
-- Repo clean, pushed, MIT, credited to murkzuk with the DeepSeek build note. `dist\TBC_Menu-1.7.4.zip`.
-- Installed: `<game>\Mods\TBC_Menu.dll` 1.7.4 (`6B56D5D8...`), hash-identical to the build. `version.dll` is back
+- Repo clean, pushed, MIT, credited to murkzuk with the DeepSeek build note. `dist\TBC_Menu-1.7.5.zip`.
+- Installed: `<game>\Mods\TBC_Menu.dll` 1.7.5 (`19EFDB7C...`), hash-identical to the build. `version.dll` is back
   in place (MelonLoader active).
 - User config: `Render direct to screen` on, `internal_scale` 0, MSAA 8, render scale 2, shadow
   distance 400, seven per-tank vehicle entries, `player_only: true`.
@@ -226,18 +226,25 @@ first of the follow-ups:
 
 ## Open items, in the order they matter
 
-1. **Terrain: iterate on the half-height version** - it is at ~1.2 deg mean slope now; if it reads too
+1. **The Effects tab does nothing in a battle scene** (found 1.7.5, documented in `TODO.md` with the
+   measurements and the three next candidates: volume `isGlobal`/`weight`/layer mask, `sharedProfile`
+   vs runtime `profile`, runtime component ordering). It works at the title screen. Instruments are in
+   place: the `effects [why]` log line and `post on/off` per camera in the F8 dump.
+2. **Aim at a non-16:9 window** is geometry-checked, not shot-tested: at 1440x1080 the game
+   letterboxes the 3D camera (`pixelRect 0,135,1440,810`) while the constants track the screen, so
+   the two no longer match. 16:9 is unaffected. Fix, if needed, is to take the constants from the main
+   camera's `pixelRect`.
+3. **Terrain: iterate on the half-height version** - it is at ~1.2 deg mean slope now; if it reads too
    flat, the way to keep the height while restoring hill character is shorter wavelengths (ridged
    noise), not more amplitude.
-2. **The 12 unmeasured tanks still only have estimated performance.** Their `Tank_Name` keys are
+4. **The 12 unmeasured tanks still only have estimated performance.** Their `Tank_Name` keys are
    verified (see 1.7.4 above) and the entries therefore work; what is guessed is `max_speed`,
    `traverse` and `accel_time` for everything except the six measured tanks.
-3. **Non-16:9 aiming** - `Fixed_Aspect_Camera_CS` letterboxes to 1.7778, so the aim constants may
-   need the camera rect rather than the screen size; untested at 21:9 and 4:3.
-4. **Torque on slopes** is still unmeasured (`torque_scale` only shows on gradients).
-5. **Dead AI knob** - `ai_visibility_scale` multiplies `Extended_Visibility`, which is **0** on this
+
+5. **Torque on slopes** is still unmeasured (`torque_scale` only shows on gradients).
+6. **Dead AI knob** - `ai_visibility_scale` multiplies `Extended_Visibility`, which is **0** on this
    game's vehicles, so it does nothing. Find the field the AI actually spots with, or drop the knob.
-6. **Backlog**: `cost_scale` and `allow_manual_respawn` (lost in an earlier consolidation), the two
+7. **Backlog**: `cost_scale` and `allow_manual_respawn` (lost in an earlier consolidation), the two
    AI knobs that exist in config but have no menu row, AI deceleration (dumps show 0.01 s, i.e. AI
    tanks stop instantly).
 
